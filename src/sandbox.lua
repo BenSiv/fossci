@@ -48,7 +48,9 @@ end
 -- gets added to the global environment (e.g. networking libraries).
 function sandbox.extension_env(capabilities)
     env = base_env()
-    capabilities = capabilities or {}
+    if capabilities == nil then
+        capabilities = {}
+    end
     if capabilities.net == "outbound" then
         env.socket = require("socket")
     end

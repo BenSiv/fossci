@@ -35,7 +35,7 @@ function entity.validate(db_path, entity_type, values)
         value = values[field.name]
 
         if (value == nil or value == "") then
-            if field.required == 1 then
+            if tonumber(field.required) == 1 then
                 table.insert(issues, {field = field.name, severity = "error",
                     message = "required field is missing"})
             end
@@ -47,7 +47,10 @@ function entity.validate(db_path, entity_type, values)
 
             if field.type == "select" then
                 json = require("dkjson")
-                allowed = json.decode(field.enum_values) or {}
+                allowed = json.decode(field.enum_values)
+                if allowed == nil then
+                    allowed = {}
+                end
                 ok = false
                 for _, v in ipairs(allowed) do
                     if tostring(v) == tostring(value) then
@@ -61,7 +64,10 @@ function entity.validate(db_path, entity_type, values)
             end
 
             if field.type == "reference" then
-                ref_type = field.ref_entity_type or entity_type
+                ref_type = entity_type
+                if field.ref_entity_type != nil then
+                    ref_type = field.ref_entity_type
+                end
                 found = entity.get(db_path, ref_type, tonumber(value))
                 if found == nil then
                     table.insert(issues, {field = field.name, severity = "error",
@@ -178,12 +184,19 @@ function entity.list(db_path, entity_type)
     if db.table_exists(db_path, entity_type) == false then
         return {}
     end
-    return db.query(db_path, "SELECT * FROM " .. entity_type .. ";") or {}
+    rows = db.query(db_path, "SELECT * FROM " .. entity_type .. ";")
+    if rows == nil then
+        return {}
+    end
+    return rows
 end
 
 function print_issues(issues)
     for _, issue in ipairs(issues) do
-        label = issue.field or "(row)"
+        label = "(row)"
+        if issue.field != nil then
+            label = issue.field
+        end
         print(string.format("  [%s] %s: %s", issue.severity, label, issue.message))
     end
 end

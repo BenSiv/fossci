@@ -11,7 +11,9 @@ ledger = require("ledger")
 init = {}
 
 function init.do_init(cmd_args, root)
-    root = root or "."
+    if root == nil then
+        root = "."
+    end
     if config.is_initialized(root) then
         print("Already initialized: " .. config.db_path(root))
         return

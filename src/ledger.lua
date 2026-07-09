@@ -50,7 +50,9 @@ end
 -- Appends a 'create' event and returns the new entity_id.
 -- `values` is a plain {field_name = value} table.
 function ledger.append_create(db_path, entity_type, values, author, source)
-    source = source or {}
+    if source == nil then
+        source = {}
+    end
     field_changes = {}
     for name, value in pairs(values) do
         field_changes[name] = {old = nil, new = value}
@@ -66,7 +68,11 @@ function ledger.append_create(db_path, entity_type, values, author, source)
     )
     db.exec(db_path, statement)
 
-    rows = db.query(db_path, "SELECT last_insert_rowid() AS id;")
+    -- database.lua opens a fresh connection per call (see db.lua), so
+    -- last_insert_rowid() would be scoped to a connection that never
+    -- did the insert. MAX(event_id) is connection-independent and safe
+    -- here: v0 is a single-process CLI, no concurrent writers.
+    rows = db.query(db_path, "SELECT MAX(event_id) AS id FROM entity_event;")
     entity_id = tonumber(rows[1].id)
     db.exec(db_path, string.format(
         "UPDATE entity_event SET entity_id = %d WHERE event_id = %d;", entity_id, entity_id
@@ -79,7 +85,9 @@ end
 -- compute the diff themselves, since only they know the entity's
 -- current projected values.
 function ledger.append_update(db_path, entity_type, entity_id, field_changes, author, source)
-    source = source or {}
+    if source == nil then
+        source = {}
+    end
     statement = string.format(
         "INSERT INTO entity_event (entity_id, entity_type, event_type, field_changes, author, source_notebook_entry_id, source_row_id) VALUES (%d, %s, 'update', %s, %s, %s, %s);",
         entity_id,
@@ -90,16 +98,16 @@ function ledger.append_update(db_path, entity_type, entity_id, field_changes, au
         db.literal(source.row_id)
     )
     db.exec(db_path, statement)
-    rows = db.query(db_path, "SELECT last_insert_rowid() AS id;")
+    rows = db.query(db_path, "SELECT MAX(event_id) AS id FROM entity_event;")
     return tonumber(rows[1].id)
 end
 
 function ledger.append_archive(db_path, entity_type, entity_id, author, source)
-    return ledger.append_update(db_path, entity_type, entity_id, {}, author, source)
-        and db.exec(db_path, string.format(
-            "UPDATE entity_event SET event_type = 'archive' WHERE event_id = (SELECT MAX(event_id) FROM entity_event WHERE entity_id = %d);",
-            entity_id
-        ))
+    ledger.append_update(db_path, entity_type, entity_id, {}, author, source)
+    return db.exec(db_path, string.format(
+        "UPDATE entity_event SET event_type = 'archive' WHERE event_id = (SELECT MAX(event_id) FROM entity_event WHERE entity_id = %d);",
+        entity_id
+    ))
 end
 
 -- Full event history for one entity, oldest first.

@@ -93,10 +93,14 @@ function schema.register(db_path, def)
             json = require("dkjson")
             enum_json = json.encode(field.values)
         end
+        required_flag = 0
+        if field.required == true then
+            required_flag = 1
+        end
         db.exec(db_path, string.format(
             "INSERT OR REPLACE INTO entity_field (entity_type, name, type, required, enum_values, ref_entity_type, field_order) VALUES (%s, %s, %s, %d, %s, %s, %d);",
             db.quote(def.name), db.quote(field.name), db.quote(field.type),
-            field.required and 1 or 0,
+            required_flag,
             db.literal(enum_json),
             db.literal(field.entity_type),
             i
@@ -148,12 +152,18 @@ function schema.fields(db_path, entity_type)
         "SELECT * FROM entity_field WHERE entity_type = %s ORDER BY field_order ASC;",
         db.quote(entity_type)
     ))
-    return rows or {}
+    if rows == nil then
+        return {}
+    end
+    return rows
 end
 
 function schema.list(db_path)
     rows = db.query(db_path, "SELECT name FROM entity_type ORDER BY name ASC;")
-    return rows or {}
+    if rows == nil then
+        return {}
+    end
+    return rows
 end
 
 -- CLI entry point: `fossci schema <add|list|show> [args]`
@@ -190,7 +200,10 @@ function schema.do_schema(cmd_args, db_path)
             return
         end
         for _, field in ipairs(schema.fields(db_path, name)) do
-            required = field.required == 1 and "required" or "optional"
+            required = "optional"
+            if tonumber(field.required) == 1 then
+                required = "required"
+            end
             print(string.format("%-20s %-10s %s", field.name, field.type, required))
         end
         return

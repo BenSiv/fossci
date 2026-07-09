@@ -13,7 +13,9 @@ STORE_DIR = ".fossci"
 DB_FILE = "fossci.db"
 
 function config.store_dir(root)
-    root = root or "."
+    if root == nil then
+        root = "."
+    end
     return paths.joinpath(root, STORE_DIR)
 end
 
