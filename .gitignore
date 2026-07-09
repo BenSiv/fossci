@@ -1,0 +1,20 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# Local dev data
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Publication outputs
+pub/*.deb
+pub/*.rpm
+pub/*.tar.gz
+pub/*.zip
+
+# Temporary files
+*.swp
+*~
