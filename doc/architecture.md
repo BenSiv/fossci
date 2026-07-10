@@ -10,17 +10,20 @@ binary (see `bld/build.sh`).
 
 ```
                      +------------------+
-                     |   Fossil (fork)  |   version control, auth,
-                     |  wiki / timeline |   permissions, knowledge mgmt
+                     |   Fossil (fork)  |   version control, auth, UI,
+                     |  wiki / timeline |   permissions, knowledge mgmt,
+                     |                  |   AI tooling
                      +--------+---------+
-                              |  HTTP/JSON API (wiki read/write)
-                              |  read-only SQLite access (auth check)
+                              |  declarative scientific layouts
+                              |  structured registration results
                      +--------v---------+
                      |      fossci      |
-                     |  entity ledger   |
-                     |  registration UI |
-                     |  event bus       |
-                     |  extensions      |
+                     | entity ledger,   |
+                     | registration     |
+                     | semantics,       |
+                     | scientific       |
+                     | layouts, rules,  |
+                     | lineage, queries |
                      +--------+---------+
                               |
                      +--------v---------+
@@ -29,10 +32,14 @@ binary (see `bld/build.sh`).
                      +------------------+
 ```
 
-Fossil is never modified. Everything fossci-specific -- the entity ledger,
-the registration workflow, the event bus, the extension runtime -- lives
-in this one codebase, callable against any Fossil repository that exposes
-its normal API.
+Fossil is the platform, not a service fossci attempts to replace. It owns
+the user interface, HTTP surface, identity/capabilities, repository database,
+wiki, version history, and the fork's AI/knowledge-management tooling.
+Fossci is the scientific-management layer: it owns the entity ledger,
+schema-driven registration semantics, validation, lineage, query models,
+and Luam extensibility. It gives Fossil declarative layout information and
+structured results; Fossil renders the interface and applies its normal
+security and navigation model.
 
 ## Why Fossil, unmodified
 
@@ -87,22 +94,23 @@ require touching the ledger or entity logic above it.
 
 ## Fossil integration
 
-- **Auth**: fossci opens a read-only connection to Fossil's own
-  repository SQLite file to validate session state and look up
-  capability strings -- reusing Fossil's actual login system rather than
-  reimplementing one.
-- **Notebook entries**: authored as Fossil wiki pages. Registration
-  Tables are a specific HTML/JS block embedded in the wiki page's raw
-  HTML (which Fossil already permits); fossci's JS hydrates that block
-  into an interactive widget that calls back to fossci's own API.
-  No Fossil-side change is required for this.
-- **Schema and extension files**: version-controlled as files in the
-  Fossil repository (`schemas/`, `extensions/`). Fossil has no native
-  push webhook (confirmed still-open upstream:
-  `elabftw`-adjacent issue tracking aside, Fossil's own
-  `Webhook for process automation` request has sat open since 2022), so
-  fossci polls the timeline/JSON API for commits touching those paths on
-  a short interval rather than waiting for a push.
+Fossci does not run a competing web server or ship a separate HTML/JS
+application. The integration boundary is a declarative contract:
+
+- **Fossci supplies** entity schemas, registration-table layout data,
+  validation results, lineage links, and query definitions.
+- **Fossil renders** those layouts in its existing UI, uses its normal
+  session and capability checks, persists notebook/wiki content, and
+  provides history, navigation, and AI/knowledge-management features.
+- **Schema and extension files** remain version-controlled Fossil files
+  (`schemas/`, `extensions/`), so their own changes are reviewable and
+  traceable through Fossil.
+
+The precise Fossil bridge for accepting and rendering Fossci layouts is an
+implementation decision for M1. Fossil's existing custom-editor and
+page-rendering extension points are candidates; if they need a focused
+adapter in this Fossil fork, the adapter belongs in Fossil rather than in a
+parallel Fossci UI.
 
 ## Extension sandboxing: pure Luam, no C required
 

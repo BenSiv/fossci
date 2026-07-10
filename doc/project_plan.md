@@ -3,10 +3,11 @@
 fossci is a general-purpose scientific entity-tracking, experiment-planning,
 and lab-notebook layer, built as a bolt-on to [Fossil](https://fossil-scm.org)
 (specifically, [this fork](https://github.com/BenSiv/fossil-scm), which adds
-AI-enabled knowledge management on top of stock Fossil). fossci does not
-modify Fossil's own source. It talks to Fossil the way any client would:
-over its HTTP/JSON API, and by reading its repository SQLite file for
-authentication.
+AI-enabled knowledge management on top of stock Fossil). Fossci remains
+separate from Fossil's core domain code, but integrates through Fossil's
+extension and page-rendering mechanisms. If M1 needs a focused bridge in
+this fork, that bridge belongs to Fossil; Fossci still does not duplicate
+Fossil's UI or platform services.
 
 See [manifesto.md](manifesto.md) for why this exists and
 [architecture.md](architecture.md) for the technical design.
@@ -19,7 +20,8 @@ See [manifesto.md](manifesto.md) for why this exists and
 | Notebook entry text (free-text/markup) | Fossil wiki pages |
 | Schema-as-code (entity type definitions) and extension scripts | Fossil-tracked files -- version history for free |
 | Entity ledger + projected tables (structured data, queryable) | fossci, own SQL storage |
-| Registration table UI, event bus, extension execution | fossci |
+| Page chrome, forms, tables, navigation, session handling | Fossil (its existing UI) |
+| Scientific layouts, entity registration semantics, validation, lineage, queries, extensions | fossci |
 
 ## Milestones
 
@@ -37,12 +39,15 @@ See [manifesto.md](manifesto.md) for why this exists and
   example extension before anything else is layered on top.
 
 ### M1 -- Registration workflow
-- Registration Table UI: a wiki-embeddable widget bound to an entity type,
-  submitting rows to fossci for validation and registration.
+- Registration layout: fossci supplies Fossil with a declarative description
+  of a table bound to an entity type. Fossil renders and hosts the table
+  using its own UI, rather than fossci shipping a second web UI.
 - Before-hooks: scriptable validation rules, run synchronously, blocking
-  the write on any error-severity issue, surfaced inline per row/field.
-- Fossil integration: read-only auth check against Fossil's user table,
-  wiki read/write via its API.
+  the write on any error-severity issue. Fossil surfaces issues inline per
+  row and field from fossci's structured result.
+- Fossil integration: use Fossil's identity, capabilities, repository,
+  wiki, version history, and AI/knowledge-management facilities. fossci
+  supplies the scientific-management layer; it does not duplicate them.
 
 ### M2 -- Extensibility platform
 - Extension manifests: declared event subscriptions + capabilities

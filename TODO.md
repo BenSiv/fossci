@@ -10,11 +10,10 @@
 - [x] Test harness: bats CLI tests + Luam unit tests
 
 ## Next (M1 -- registration workflow)
-- [ ] Registration Table wiki-embeddable widget (HTML/JS block + hydration)
-- [ ] Before-hooks: scriptable validation, blocking, inline per-row/field issues
-- [ ] Fossil integration: read-only auth check against Fossil's user table
-- [ ] Fossil integration: wiki read/write via its JSON API
-- [ ] Fossil integration: polling sync for `schemas/`/`extensions/` path changes (no native webhook exists upstream)
+- [ ] Declarative registration-table layout supplied by fossci and rendered by Fossil
+- [ ] Before-hooks: scriptable validation, blocking, structured per-row/field issues for Fossil to render
+- [ ] Fossil bridge: identity/capability context and Fossci layout/result exchange, using Fossil's existing extension/page mechanisms
+- [ ] Fossil-backed schema and extension discovery from version-controlled repository files
 
 ## Later (M2 -- extensibility platform)
 - [ ] Extension manifest format + loader/registry

@@ -4,13 +4,14 @@ fossci (**Foss**il + **F**ree/**O**pen **S**ource **S**oftware + **Sci**ence)
 is a general-purpose scientific entity-tracking, experiment-planning, and
 lab-notebook system, built as a bolt-on to [Fossil](https://fossil-scm.org).
 
-It does not fork or modify Fossil. Fossil stays exactly what it already is
--- version control, permissions, wiki, an AI-enabled knowledge layer (see
-[this fork](https://github.com/BenSiv/fossil-scm)) -- and fossci adds
-structured entity tracking, registration workflows, and scriptable
-extensibility on top of it, for whatever science someone is doing. It is
-not shaped around any one discipline; see [doc/manifesto.md](doc/manifesto.md)
-for why that matters.
+Fossil remains the platform: its UI, database, version control, permissions,
+wiki, and AI-enabled knowledge layer (see
+[this fork](https://github.com/BenSiv/fossil-scm)). Fossci adds the
+scientific-management layer on top: structured entity tracking, registration
+semantics, lineage, queries, and Luam-scripted extensibility. Fossci supplies
+scientific layouts and results for Fossil to render; it does not duplicate
+Fossil with a separate UI. It is not shaped around any one discipline; see
+[doc/manifesto.md](doc/manifesto.md) for why that matters.
 
 ## Key ideas
 
