@@ -19,7 +19,24 @@ do_entity = entity.do_entity
 ledger = require("ledger")
 do_ledger = ledger.do_ledger
 
+cgi = require("cgi")
+
 function main()
+    -- Check if running in CGI environment
+    gateway = os.getenv("GATEWAY_INTERFACE")
+    method = os.getenv("REQUEST_METHOD")
+    is_cgi = (gateway != nil and gateway != "") or (method != nil and method != "")
+
+    if is_cgi then
+        ok, err = pcall(cgi.handle_request)
+        if not ok then
+            io.write("Status: 500 Internal Server Error\r\n")
+            io.write("Content-Type: text/plain\r\n\r\n")
+            io.write("Internal Server Error: " .. tostring(err) .. "\n")
+        end
+        return
+    end
+
     command_funcs = {
         ["init"] = do_init,
         ["schema"] = do_schema,
@@ -70,3 +87,4 @@ function main()
 end
 
 main()
+

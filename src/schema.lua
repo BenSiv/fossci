@@ -6,6 +6,7 @@
 db = require("db")
 sandbox = require("sandbox")
 paths = require("paths")
+lfs = require("lfs")
 
 schema = {}
 
@@ -145,6 +146,93 @@ function schema.sync_table(db_path, def)
     end
 end
 
+-- Scans the schemas directory, registers any schema files found,
+-- and ensures all projected tables are synced/created.
+function schema.sync_all(db_path, root)
+    config = require("config")
+    schemas_dir = config.schemas_dir(root)
+    attr = lfs.attributes(schemas_dir)
+    if attr == nil or attr.mode != "directory" then
+        return false, "schemas directory not found: " .. schemas_dir
+    end
+    for file_name in lfs.dir(schemas_dir) do
+        if file_name:match("%.lua$") then
+            full_path = paths.joinpath(schemas_dir, file_name)
+            def, err = schema.load_file(full_path)
+            if def != nil then
+                schema.register(db_path, def)
+            end
+        end
+    end
+    return true
+end
+
+-- Renders the schema structure as a JSON string.
+-- Will attempt to load labels directly from the version-controlled schema file
+-- if available, falling back to database description.
+function schema.show_json(db_path, name)
+    config = require("config")
+    schemas_dir = config.schemas_dir()
+    path = paths.joinpath(schemas_dir, name .. ".lua")
+    def = nil
+    if paths.file_exists(path) then
+        def = schema.load_file(path)
+    end
+
+    dkjson = require("dkjson")
+    if def then
+        result = {
+            name = def.name,
+            fields = {}
+        }
+        for _, field in ipairs(def.fields) do
+            required = (field.required == true)
+            label = field.label or field.name:gsub("^%l", string.upper):gsub("_", " ")
+            field_def = {
+                name = field.name,
+                label = label,
+                type = field.type,
+                required = required
+            }
+            if field.values then
+                field_def.values = field.values
+            end
+            if field.entity_type then
+                field_def.ref_entity_type = field.entity_type
+            end
+            table.insert(result.fields, field_def)
+        end
+        return dkjson.encode(result)
+    else
+        fields = schema.fields(db_path, name)
+        if #fields == 0 then
+            return nil, "unknown entity type: " .. name
+        end
+        result = {
+            name = name,
+            fields = {}
+        }
+        for _, f in ipairs(fields) do
+            required = (tonumber(f.required) == 1)
+            label = f.name:gsub("^%l", string.upper):gsub("_", " ")
+            field_def = {
+                name = f.name,
+                label = label,
+                type = f.type,
+                required = required
+            }
+            if f.enum_values and f.enum_values != "" then
+                field_def.values = dkjson.decode(f.enum_values)
+            end
+            if f.ref_entity_type and f.ref_entity_type != "" then
+                field_def.ref_entity_type = f.ref_entity_type
+            end
+            table.insert(result.fields, field_def)
+        end
+        return dkjson.encode(result)
+    end
+end
+
 -- The registered field list for an entity type, in declaration order --
 -- what entity.lua validates rows against.
 function schema.fields(db_path, entity_type)
@@ -166,7 +254,7 @@ function schema.list(db_path)
     return rows
 end
 
--- CLI entry point: `fossci schema <add|list|show> [args]`
+-- CLI entry point: `fossci schema <add|list|show|show-json|sync> [args]`
 function schema.do_schema(cmd_args, db_path)
     action = cmd_args[1]
 
@@ -187,9 +275,26 @@ function schema.do_schema(cmd_args, db_path)
     end
 
     if action == "list" then
+        schema.sync_all(db_path)
         for _, row in ipairs(schema.list(db_path)) do
             print(row.name)
         end
+        return
+    end
+
+    if action == "show-json" or (action == "show" and cmd_args[3] == "--json") then
+        name = cmd_args[2]
+        if name == nil then
+            print("Usage: fossci schema show-json <name>")
+            return
+        end
+        schema.sync_all(db_path)
+        json_str, err = schema.show_json(db_path, name)
+        if not json_str then
+            print("Error: " .. tostring(err))
+            return
+        end
+        print(json_str)
         return
     end
 
@@ -199,6 +304,7 @@ function schema.do_schema(cmd_args, db_path)
             print("Usage: fossci schema show <name>")
             return
         end
+        schema.sync_all(db_path)
         for _, field in ipairs(schema.fields(db_path, name)) do
             required = "optional"
             if tonumber(field.required) == 1 then
@@ -209,7 +315,17 @@ function schema.do_schema(cmd_args, db_path)
         return
     end
 
-    print("Usage: fossci schema <add|list|show> [args]")
+    if action == "sync" then
+        ok, err = schema.sync_all(db_path)
+        if not ok then
+            print("Error: " .. tostring(err))
+        else
+            print("Schema sync complete")
+        end
+        return
+    end
+
+    print("Usage: fossci schema <add|list|show|show-json|sync> [args]")
 end
 
 return schema
