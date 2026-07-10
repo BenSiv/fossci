@@ -13,7 +13,7 @@ function parse_query(query_str)
     if not query_str then return params end
     for k, v in string.gmatch(query_str, "([^&=]+)=([^&=]*)") do
         -- simple url decoding for basic params
-        decoded_v = v:gsub("+", " "):gsub("%%(%x%x)", function(h)
+        decoded_v = string.gsub(string.gsub(v, "+", " "), "%%(%x%x)", function(h)
             return string.char(tonumber(h, 16))
         end)
         params[k] = decoded_v
@@ -65,6 +65,7 @@ function handle_autocomplete(db_path, params)
         if col == "name" then has_name = true end
     end
 
+    q = nil
     if has_name then
         q = "SELECT id, name FROM " .. ref_type
     else

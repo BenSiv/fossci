@@ -40,8 +40,8 @@ function run_before_hooks(db_path, entity_type, new_values, old_values, is_updat
             if paths.file_exists(manifest_path) and paths.file_exists(main_path) then
                 manifest_file = io.open(manifest_path, "r")
                 if manifest_file then
-                    manifest_src = manifest_file:read("*all")
-                    manifest_file:close()
+                    manifest_src = io.read(manifest_file, "*all")
+                    io.close(manifest_file)
 
                     ok, manifest = sandbox.run(manifest_src, manifest_path, sandbox.data_env())
                     if ok and type(manifest) == "table" then
@@ -68,8 +68,8 @@ function run_before_hooks(db_path, entity_type, new_values, old_values, is_updat
                         if matches_event and matches_entity then
                             main_file = io.open(main_path, "r")
                             if main_file then
-                                main_src = main_file:read("*all")
-                                main_file:close()
+                                main_src = io.read(main_file, "*all")
+                                io.close(main_file)
 
                                 env = sandbox.extension_env(manifest.capabilities)
                                 env.on_before = nil

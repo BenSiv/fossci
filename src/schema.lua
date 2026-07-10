@@ -156,7 +156,7 @@ function schema.sync_all(db_path, root)
         return false, "schemas directory not found: " .. schemas_dir
     end
     for file_name in lfs.dir(schemas_dir) do
-        if file_name:match("%.lua$") then
+        if string.match(file_name, "%.lua$") then
             full_path = paths.joinpath(schemas_dir, file_name)
             def, err = schema.load_file(full_path)
             if def != nil then
@@ -187,7 +187,7 @@ function schema.show_json(db_path, name)
         }
         for _, field in ipairs(def.fields) do
             required = (field.required == true)
-            label = field.label or field.name:gsub("^%l", string.upper):gsub("_", " ")
+            label = field.label or string.gsub(string.gsub(field.name, "^%l", string.upper), "_", " ")
             field_def = {
                 name = field.name,
                 label = label,
@@ -214,7 +214,7 @@ function schema.show_json(db_path, name)
         }
         for _, f in ipairs(fields) do
             required = (tonumber(f.required) == 1)
-            label = f.name:gsub("^%l", string.upper):gsub("_", " ")
+            label = string.gsub(string.gsub(f.name, "^%l", string.upper), "_", " ")
             field_def = {
                 name = f.name,
                 label = label,
