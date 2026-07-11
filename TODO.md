@@ -22,9 +22,14 @@
 - [x] Minimal Markdown wiki-page snippet (plain `<iframe>` embed)
       demonstrating a registration table framed inside Fossil's own
       navigation (doc/deployment.md)
-- [ ] Exercise the packaged deployment end to end against a real Fossil
-      server (manual verification so far; no automated integration test
-      yet -- tst/integration is still empty, see note below)
+- [x] Exercise the packaged deployment end to end against a real Fossil
+      server: real repo, real login, real `/ext` dispatch -- found and
+      fixed three real bugs in the process (lfs never actually packaged
+      in `bld/build.sh`; `--extroot` must be chroot-relative under
+      `fossil server`/`ui`; a POST-body deadlock in Fossil's own
+      `src/extcgi.c`, fixed in the fossil-scm checkout). No automated
+      integration test yet, though -- tst/integration is still empty,
+      see note below; this was manual verification.
 - [ ] Fossil-backed schema and extension discovery: read `schemas/` and
       `extensions/` from the Fossil checkout fossci is deployed
       alongside -- no Fossil change needed, just reading tracked files
