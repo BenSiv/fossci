@@ -30,9 +30,13 @@
       `src/extcgi.c`, fixed in the fossil-scm checkout). No automated
       integration test yet, though -- tst/integration is still empty,
       see note below; this was manual verification.
-- [ ] Fossil-backed schema and extension discovery: read `schemas/` and
+- [x] Fossil-backed schema and extension discovery: read `schemas/` and
       `extensions/` from the Fossil checkout fossci is deployed
-      alongside -- no Fossil change needed, just reading tracked files
+      alongside -- already how `config.schemas_dir()`/`extensions_dir()`
+      work, and already exercised for real in the end-to-end test above.
+      Decided (see doc/architecture.md, "Fossil integration"): fossci
+      requires a live `fossil open`'d checkout, deliberately -- bare-
+      repository (checkout-less) serving is out of scope by design
 
 ## Later (M2 -- extensibility platform)
 - [ ] Extension manifest format + loader/registry

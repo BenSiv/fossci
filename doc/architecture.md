@@ -125,9 +125,23 @@ special-cased for fossci:
   (`src/markdown_html.c`) -- an `<iframe>` tag, not inline `<script>`, so
   it needs no CSP-nonce cooperation from Fossil either.
 - **Schema and extension files** remain version-controlled Fossil files
-  (`schemas/`, `extensions/`); fossci reads them from its own checkout of
-  the repository it's deployed alongside. No Fossil change needed for
-  that either -- it's just reading tracked files off disk.
+  (`schemas/`, `extensions/`); fossci reads them directly off disk from
+  its own checkout of the repository it's deployed alongside. No Fossil
+  change needed for that either -- it's just reading tracked files off
+  disk.
+
+**Fossci requires a live, `fossil open`'d checkout to run -- deliberately,
+not as a stopgap.** The alternative (fetch schema/extension content
+through Fossil's HTTP/JSON API instead, so fossci could run against a bare
+repository with no working directory) was considered and rejected: it
+would trade a zero-cost, already-working mechanism for real added
+complexity (API fetch, auth, caching/invalidation), and it would weaken
+the actual point of schema-as-code -- that editing a schema is an
+ordinary Fossil commit, not a redeploy. A live checkout can drift (stuck
+merges, uncommitted local edits) if left unmanaged, but that's a
+solved, well-understood operational problem (the same one any Fossil
+checkout has), not a new one fossci introduces. Bare-repository serving
+is out of scope by design, not merely deferred.
 
 One consequence to design around: `/ext/*` bypasses Fossil's own
 per-repo read-capability checks (`serverext.wiki` says as much
