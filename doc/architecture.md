@@ -14,8 +14,8 @@ binary (see `bld/build.sh`).
                      |  wiki / timeline |   permissions, knowledge mgmt,
                      |                  |   AI tooling
                      +--------+---------+
-                              |  declarative scientific layouts
-                              |  structured registration results
+                              |  /ext CGI dispatch (stock Fossil
+                              |  feature, zero fossci-aware code)
                      +--------v---------+
                      |      fossci      |
                      | entity ledger,   |
@@ -34,12 +34,14 @@ binary (see `bld/build.sh`).
 
 Fossil is the platform, not a service fossci attempts to replace. It owns
 the user interface, HTTP surface, identity/capabilities, repository database,
-wiki, version history, and the fork's AI/knowledge-management tooling.
-Fossci is the scientific-management layer: it owns the entity ledger,
-schema-driven registration semantics, validation, lineage, query models,
-and Luam extensibility. It gives Fossil declarative layout information and
-structured results; Fossil renders the interface and applies its normal
-security and navigation model.
+wiki, version history, and the fork's AI/knowledge-management tooling --
+and it stays completely unaware that fossci exists. Fossci is the
+scientific-management layer: it owns the entity ledger, schema-driven
+registration semantics, validation, lineage, query models, and Luam
+extensibility, and it renders its own pages. Fossil's only involvement is
+relaying requests to it and framing the result, both through Fossil
+features that predate and have nothing to do with fossci (see "Fossil
+integration" below).
 
 ## Why Fossil, unmodified
 
@@ -94,23 +96,44 @@ require touching the ledger or entity logic above it.
 
 ## Fossil integration
 
-Fossci does not run a competing web server or ship a separate HTML/JS
-application. The integration boundary is a declarative contract:
+Fossil requires zero fossci-specific changes -- not in this fork, not
+anywhere. Fossci bolts on entirely through mechanisms that already ship in
+stock Fossil for *any* third-party tool, not something built or
+special-cased for fossci:
 
-- **Fossci supplies** entity schemas, registration-table layout data,
-  validation results, lineage links, and query definitions.
-- **Fossil renders** those layouts in its existing UI, uses its normal
-  session and capability checks, persists notebook/wiki content, and
-  provides history, navigation, and AI/knowledge-management features.
+- **`extroot` CGI-extension dispatch** (`src/extcgi.c`, documented in
+  `doc/web/serverext.wiki` of the Fossil tree): a repository admin points
+  Fossil's CGI launcher at a directory (`extroot: DIR` in the CGI script,
+  or `--extroot DIR` for `fossil server`/`ui`/`http`). Requests under
+  `/ext/PATH` are relayed to an executable found under `DIR`, run as a
+  real child CGI process (`popen2()`), with Fossil's login/capability
+  context passed in as environment variables (`FOSSIL_USER`,
+  `FOSSIL_CAPABILITIES`, `FOSSIL_NONCE`, ...). Fossci's compiled binary
+  *is* that executable -- pure config and deployment, no Fossil source
+  touched. `src/cgi.lua` is already written as a CGI program (reads
+  `PATH_INFO`/`QUERY_STRING`/`REQUEST_METHOD`, prints `Status:`/
+  `Content-Type:` headers) and already reads `FOSSIL_USER` from the
+  environment, so it's already shaped for this dispatch path.
+- **Fossci renders its own UI.** Because `/ext` hands fossci a full
+  request/response cycle, fossci doesn't hand Fossil a layout to render
+  (that framing is dropped) -- `src/html.lua` renders fossci's own pages
+  directly, the same way it does today.
+- **Embedding into Fossil's navigation**: a Markdown-mimetype wiki page
+  (or a `/doc/` page) with a plain `<iframe src="/ext/fossci/register?
+  type=reagent">` frames a fossci page inside Fossil's chrome. This
+  relies on Fossil's existing raw-HTML-in-Markdown allowance
+  (`src/markdown_html.c`) -- an `<iframe>` tag, not inline `<script>`, so
+  it needs no CSP-nonce cooperation from Fossil either.
 - **Schema and extension files** remain version-controlled Fossil files
-  (`schemas/`, `extensions/`), so their own changes are reviewable and
-  traceable through Fossil.
+  (`schemas/`, `extensions/`); fossci reads them from its own checkout of
+  the repository it's deployed alongside. No Fossil change needed for
+  that either -- it's just reading tracked files off disk.
 
-The precise Fossil bridge for accepting and rendering Fossci layouts is an
-implementation decision for M1. Fossil's existing custom-editor and
-page-rendering extension points are candidates; if they need a focused
-adapter in this Fossil fork, the adapter belongs in Fossil rather than in a
-parallel Fossci UI.
+One consequence to design around: `/ext/*` bypasses Fossil's own
+per-repo read-capability checks (`serverext.wiki` says as much
+explicitly) -- fossci is responsible for its own authorization decisions,
+using the `FOSSIL_CAPABILITIES` env var Fossil provides, rather than
+assuming Fossil already gated access before the request reached it.
 
 ## Extension sandboxing: pure Luam, no C required
 

@@ -3,11 +3,14 @@
 fossci is a general-purpose scientific entity-tracking, experiment-planning,
 and lab-notebook layer, built as a bolt-on to [Fossil](https://fossil-scm.org)
 (specifically, [this fork](https://github.com/BenSiv/fossil-scm), which adds
-AI-enabled knowledge management on top of stock Fossil). Fossci remains
-separate from Fossil's core domain code, but integrates through Fossil's
-extension and page-rendering mechanisms. If M1 needs a focused bridge in
-this fork, that bridge belongs to Fossil; Fossci still does not duplicate
-Fossil's UI or platform services.
+AI-enabled knowledge management on top of stock Fossil). Fossil requires
+*zero* fossci-specific changes, including in this fork -- fossci integrates
+purely through Fossil's existing, general-purpose extensibility features
+(the `extroot` CGI-extension dispatch and Markdown/wiki embedding, see
+architecture.md), the same mechanisms any third-party tool could use. No
+adapter or bridge code for fossci belongs in Fossil, in this fork or
+otherwise; fossci still does not duplicate Fossil's UI or platform
+services.
 
 See [manifesto.md](manifesto.md) for why this exists and
 [architecture.md](architecture.md) for the technical design.
@@ -20,8 +23,9 @@ See [manifesto.md](manifesto.md) for why this exists and
 | Notebook entry text (free-text/markup) | Fossil wiki pages |
 | Schema-as-code (entity type definitions) and extension scripts | Fossil-tracked files -- version history for free |
 | Entity ledger + projected tables (structured data, queryable) | fossci, own SQL storage |
-| Page chrome, forms, tables, navigation, session handling | Fossil (its existing UI) |
-| Scientific layouts, entity registration semantics, validation, lineage, queries, extensions | fossci |
+| Page chrome, overall navigation, session/login, Fossil-native pages | Fossil (its existing UI) |
+| Bolt-on dispatch (`/ext/*` CGI relay via `extroot`), request framing (iframe embed in a wiki/doc page) | Fossil (unmodified, stock feature) |
+| Registration-table rendering, forms, entity registration semantics, validation, lineage, queries, extensions | fossci (renders its own pages) |
 
 ## Milestones
 
@@ -39,15 +43,22 @@ See [manifesto.md](manifesto.md) for why this exists and
   example extension before anything else is layered on top.
 
 ### M1 -- Registration workflow
-- Registration layout: fossci supplies Fossil with a declarative description
-  of a table bound to an entity type. Fossil renders and hosts the table
-  using its own UI, rather than fossci shipping a second web UI.
+- Registration layout: fossci renders and serves its own registration
+  table for an entity type (already working end to end via
+  `/register`, `/api/autocomplete`, `/api/validate`, `/api/submit` in
+  `src/cgi.lua`). Fossil hosts it unmodified by relaying to it, not by
+  rendering it.
 - Before-hooks: scriptable validation rules, run synchronously, blocking
-  the write on any error-severity issue. Fossil surfaces issues inline per
-  row and field from fossci's structured result.
-- Fossil integration: use Fossil's identity, capabilities, repository,
-  wiki, version history, and AI/knowledge-management facilities. fossci
-  supplies the scientific-management layer; it does not duplicate them.
+  the write on any error-severity issue. Fossci renders the per-row/field
+  issues itself in its own response; there is no hand-off of structured
+  issues to Fossil to render.
+- Fossil integration (deployment, not code): package fossci's binary for
+  Fossil's `--extroot` directory so `/ext/fossci/...` reaches it; consume
+  the `FOSSIL_USER`/`FOSSIL_CAPABILITIES`/`FOSSIL_NONCE` environment
+  variables Fossil already injects for identity/capability context;
+  enforce fossci's own authorization, since `/ext/*` bypasses Fossil's
+  repo read-capability checks. Embed via a plain `<iframe>` in a
+  Markdown wiki/doc page. No changes to Fossil itself.
 
 ### M2 -- Extensibility platform
 - Extension manifests: declared event subscriptions + capabilities

@@ -10,10 +10,23 @@
 - [x] Test harness: bats CLI tests + Luam unit tests
 
 ## Next (M1 -- registration workflow)
-- [ ] Declarative registration-table layout supplied by fossci and rendered by Fossil
-- [ ] Before-hooks: scriptable validation, blocking, structured per-row/field issues for Fossil to render
-- [ ] Fossil bridge: identity/capability context and Fossci layout/result exchange, using Fossil's existing extension/page mechanisms
-- [ ] Fossil-backed schema and extension discovery from version-controlled repository files
+- [x] Registration-table CGI flow: fossci renders and serves its own
+      `/register`, `/api/autocomplete`, `/api/validate`, `/api/submit`
+      (`src/cgi.lua`), including before-hook validation with structured
+      per-row/field issues rendered by fossci itself
+- [ ] Package fossci's binary + config for deployment under Fossil's
+      `--extroot` directory (`doc/web/serverext.wiki` mechanism in the
+      Fossil tree) -- zero Fossil changes, pure deployment
+- [ ] Read `FOSSIL_USER` / `FOSSIL_CAPABILITIES` / `FOSSIL_NONCE` env vars
+      (already injected by Fossil's `/ext` dispatch) for identity/
+      capability context; enforce fossci-side authorization, since
+      `/ext/*` bypasses Fossil's own repo read-capability checks
+- [ ] Minimal Markdown wiki-page snippet (plain `<iframe>` embed)
+      demonstrating a registration table framed inside Fossil's own
+      navigation
+- [ ] Fossil-backed schema and extension discovery: read `schemas/` and
+      `extensions/` from the Fossil checkout fossci is deployed
+      alongside -- no Fossil change needed, just reading tracked files
 
 ## Later (M2 -- extensibility platform)
 - [ ] Extension manifest format + loader/registry
