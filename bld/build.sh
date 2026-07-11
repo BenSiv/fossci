@@ -70,7 +70,6 @@ run_cmd cp -R src/* "$TMPDIR"/
 
 # Copy luam standard libraries
 run_cmd cp "$LUAM_DIR/lib/"*.lua "$TMPDIR"/
-run_cmd cp "$LUAM_DIR/lib/lfs/init.lua" "$TMPDIR/lfs_pure.lua" 2>/dev/null || true
 run_cmd cp "$LUAM_DIR/lib/dkjson/init.lua" "$TMPDIR/dkjson.lua"
 
 # Remove static.lua (tool) to prevent it from being compiled into the binary source list inadvertently
@@ -90,24 +89,35 @@ run_cmd env CC="" "$LUAM_BIN" "$STATIC_TOOL" \
     -I "$LUAM_DIR/src" \
     -lm -ldl -lreadline -lpthread
 
-# Inject lsqlite3 preload. Schemas and extension manifests are plain Luam
-# table files (loaded via loadstring+setfenv, see doc/schema.md) -- no
-# YAML/JSON parser is linked in for that path. JSON (dkjson, pure Luam,
-# already copied above) is only used for internal ledger serialization
-# and, later, the Fossil API boundary.
+# Inject lsqlite3 and lfs preload. Schemas and extension manifests are
+# plain Luam table files (loaded via loadstring+setfenv, see
+# doc/schema.md) -- no YAML/JSON parser is linked in for that path. JSON
+# (dkjson, pure Luam, already copied above) is only used for internal
+# ledger serialization and, later, the Fossil API boundary. lfs is a
+# native C extension (lib/lfs/src/lfs.c), not a pure-Lua module -- it
+# must be compiled and preload-injected the same way sqlite3 is, not
+# copied as a .lua file (config.lua/schema.lua/entity.lua all need
+# require("lfs") to resolve when run with a stripped environment, e.g.
+# under Fossil's /ext dispatch -- see doc/deployment.md).
 run_cmd sed -i '/luaL_openlibs(L);/a \
   int luaopen_sqlite3(lua_State *L); \
+  int luaopen_lfs(lua_State *L); \
   lua_getglobal(L, "package"); \
   lua_getfield(L, -1, "preload"); \
   lua_pushcfunction(L, luaopen_sqlite3); \
   lua_setfield(L, -2, "sqlite3"); \
+  lua_pushcfunction(L, luaopen_lfs); \
+  lua_setfield(L, -2, "lfs"); \
   lua_pop(L, 2);' fossci.static.c
 
 # Compile lsqlite3
 run_cmd cc -c -O2 -I"$LUAM_DIR/src" "$LUAM_DIR/lib/sqlite/lsqlite3.c" -o lsqlite3.o
 
+# Compile lfs
+run_cmd cc -c -O2 -I"$LUAM_DIR/src" "$LUAM_DIR/lib/lfs/src/lfs.c" -o lfs.o
+
 # Compile binary
-run_cmd cc -Os fossci.static.c lsqlite3.o "$LUAM_LIB" \
+run_cmd cc -Os fossci.static.c lsqlite3.o lfs.o "$LUAM_LIB" \
     -I "$LUAM_DIR/src" \
     -lm -ldl -lreadline -lpthread -lsqlite3 \
     -Wl,--export-dynamic \

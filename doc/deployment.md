@@ -42,11 +42,21 @@ requires no Fossil source changes -- just repository/server config:
   extroot: /absolute/path/to/<checkout>/.ext
   ```
 
-- If Fossil runs via `fossil server`/`ui`/`http`, add a flag:
+- If Fossil runs via `fossil server`/`ui`/`http`, add a flag -- **but note
+  these commands `chroot()` into the repository's own directory by
+  default** (`--chroot DIR` overrides it, `--nojail` disables it), so
+  `--extroot` must be given as the path *as seen from inside that jail*,
+  not the real host-absolute path. If `repo.fossil` and `<checkout>/.ext`
+  are siblings (the default layout above), that's simply the same
+  subpath with the parent stripped:
 
   ```bash
-  fossil server /path/to/repo.fossil --extroot /absolute/path/to/<checkout>/.ext
+  fossil server /path/to/repo.fossil --extroot /.ext
   ```
+
+  Getting this wrong doesn't error at startup -- it fails per-request with
+  "extroot is not a directory", because the path is resolved inside the
+  jail. Verified against a real `fossil server` instance.
 
 Requests to `/ext/fossci/*` are now relayed to `bin/fossci` as a child CGI
 process, with `FOSSIL_USER`, `FOSSIL_CAPABILITIES`, `FOSSIL_NONCE`, and the
@@ -54,6 +64,16 @@ rest of the standard CGI environment set for it (`src/extcgi.c` in the
 Fossil tree). For example, `/ext/fossci/register?type=reagent` invokes
 `bin/fossci` with `PATH_INFO=/register` and `QUERY_STRING=type=reagent`,
 matching `src/cgi.lua`'s routing.
+
+**Requires a Fossil build with the `/ext` POST-body relay fix.** Stock
+Fossil's `ext_page()` (`src/extcgi.c`) writes the request body to the
+child CGI's stdin but doesn't close that pipe until *after* it tries to
+read the child's entire response -- any extension that reads its POST
+body to EOF before responding (as any normal CGI program does, fossci
+included) deadlocks, and so does Fossil. This is fixed in this
+fork/checkout; `POST /ext/fossci/api/validate` and `.../api/submit` will
+hang indefinitely on a Fossil build without the fix. GET-only endpoints
+(`register`, `autocomplete`) are unaffected.
 
 ### Authorization
 
