@@ -14,16 +14,16 @@ DB_FILE = "fossci.db"
 function config.find_checkout_root()
     -- Try DOCUMENT_ROOT (CGI mode)
     cwd = os.getenv("DOCUMENT_ROOT")
-    if not cwd or cwd == "" then
+    if cwd == nil or cwd == "" then
         -- Try SCRIPT_DIRECTORY (CGI mode)
         cwd = os.getenv("SCRIPT_DIRECTORY")
     end
-    if not cwd or cwd == "" then
+    if cwd == nil or cwd == "" then
         -- Fall back to current working directory (CLI mode)
         cwd = lfs.currentdir()
     end
 
-    if not cwd then
+    if cwd == nil then
         return "."
     end
 
@@ -31,7 +31,7 @@ function config.find_checkout_root()
     cwd = string.gsub(cwd, "\\", "/")
 
     scan_dir = cwd
-    while scan_dir and scan_dir != "" do
+    while scan_dir != nil and scan_dir != "" do
         fslck = paths.joinpath(scan_dir, ".fslckout")
         fossil_file = paths.joinpath(scan_dir, "_FOSSIL_")
         if paths.file_exists(fslck) or paths.file_exists(fossil_file) then
@@ -39,7 +39,7 @@ function config.find_checkout_root()
         end
         -- Move to parent directory
         par = paths.get_parent_dir(scan_dir)
-        if not par or par == scan_dir then
+        if par == nil or par == scan_dir then
             break
         end
         scan_dir = string.gsub(par, "/$", "")

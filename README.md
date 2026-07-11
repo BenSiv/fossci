@@ -30,7 +30,9 @@ Fossil with a separate UI. It is not shaped around any one discipline; see
 See [doc/architecture.md](doc/architecture.md) for the technical design,
 [doc/schema.md](doc/schema.md) for the entity-type format, and
 [doc/extensibility.md](doc/extensibility.md) for how extensions work.
-[doc/project_plan.md](doc/project_plan.md) has the milestone roadmap.
+[doc/project_plan.md](doc/project_plan.md) has the milestone roadmap, and
+[doc/deployment.md](doc/deployment.md) covers bolting fossci onto a
+running Fossil server.
 
 ## Status
 

@@ -156,7 +156,7 @@ function schema.sync_all(db_path, root)
         return false, "schemas directory not found: " .. schemas_dir
     end
     for file_name in lfs.dir(schemas_dir) do
-        if string.match(file_name, "%.lua$") then
+        if string.match(file_name, "%.lua$") != nil then
             full_path = paths.joinpath(schemas_dir, file_name)
             def, err = schema.load_file(full_path)
             if def != nil then
@@ -180,24 +180,27 @@ function schema.show_json(db_path, name)
     end
 
     dkjson = require("dkjson")
-    if def then
+    if def != nil then
         result = {
             name = def.name,
             fields = {}
         }
         for _, field in ipairs(def.fields) do
             required = (field.required == true)
-            label = field.label or string.gsub(string.gsub(field.name, "^%l", string.upper), "_", " ")
+            label = field.label
+            if label == nil then
+                label = string.gsub(string.gsub(field.name, "^%l", string.upper), "_", " ")
+            end
             field_def = {
                 name = field.name,
                 label = label,
                 type = field.type,
                 required = required
             }
-            if field.values then
+            if field.values != nil then
                 field_def.values = field.values
             end
-            if field.entity_type then
+            if field.entity_type != nil then
                 field_def.ref_entity_type = field.entity_type
             end
             table.insert(result.fields, field_def)
@@ -221,10 +224,10 @@ function schema.show_json(db_path, name)
                 type = f.type,
                 required = required
             }
-            if f.enum_values and f.enum_values != "" then
+            if f.enum_values != nil and f.enum_values != "" then
                 field_def.values = dkjson.decode(f.enum_values)
             end
-            if f.ref_entity_type and f.ref_entity_type != "" then
+            if f.ref_entity_type != nil and f.ref_entity_type != "" then
                 field_def.ref_entity_type = f.ref_entity_type
             end
             table.insert(result.fields, field_def)
@@ -290,7 +293,7 @@ function schema.do_schema(cmd_args, db_path)
         end
         schema.sync_all(db_path)
         json_str, err = schema.show_json(db_path, name)
-        if not json_str then
+        if json_str == nil then
             print("Error: " .. tostring(err))
             return
         end

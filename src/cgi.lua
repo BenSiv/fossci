@@ -8,9 +8,33 @@ paths = require("paths")
 
 cgi = {}
 
+-- Fossil's /ext dispatch bypasses the repo's own read-capability check
+-- (see doc/architecture.md), so fossci gates itself here. "i" (Check-In)
+-- is the closest existing Fossil capability to "real contributor with
+-- write access"; Setup/Admin logins already carry it via fullcap().
+REQUIRED_CAPABILITY = "i"
+
+function cgi.has_capability(capabilities, letter)
+    if capabilities == nil or capabilities == "" then
+        return false
+    end
+    return string.find(capabilities, letter, 1, true) != nil
+end
+
+-- Luam's and/or require boolean operands, so plain "value or default"
+-- nil-coalescing (fine in stock Lua) errors here whenever value is a
+-- truthy non-boolean (e.g. any real env var/query value) -- exactly the
+-- normal-success case, not just an edge case.
+function default_value(value, fallback)
+    if value == nil then
+        return fallback
+    end
+    return value
+end
+
 function parse_query(query_str)
     params = {}
-    if not query_str then return params end
+    if query_str == nil then return params end
     for k, v in string.gmatch(query_str, "([^&=]+)=([^&=]*)") do
         -- simple url decoding for basic params
         decoded_v = string.gsub(string.gsub(v, "+", " "), "%%(%x%x)", function(h)
@@ -31,8 +55,8 @@ end
 
 function handle_autocomplete(db_path, params)
     ref_type = params.type
-    query_str = params.query or ""
-    if not ref_type or ref_type == "" then
+    query_str = default_value(params.query, "")
+    if ref_type == nil or ref_type == "" then
         return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type"}))
     end
 
@@ -85,15 +109,19 @@ function handle_autocomplete(db_path, params)
     q = q .. " LIMIT 15;"
 
     rows = db.query(db_path, q)
-    result = rows or {}
+    result = default_value(rows, {})
     return print_response("200 OK", "application/json", json.encode(result))
 end
 
 function cgi.handle_request()
-    path_info = os.getenv("PATH_INFO") or "/register"
-    query_string = os.getenv("QUERY_STRING") or ""
-    method = os.getenv("REQUEST_METHOD") or "GET"
+    path_info = default_value(os.getenv("PATH_INFO"), "/register")
+    query_string = default_value(os.getenv("QUERY_STRING"), "")
+    method = default_value(os.getenv("REQUEST_METHOD"), "GET")
     params = parse_query(query_string)
+
+    if not cgi.has_capability(os.getenv("FOSSIL_CAPABILITIES"), REQUIRED_CAPABILITY) then
+        return print_response("403 Forbidden", "text/html", "<div class='fossil-doc'><h3>Forbidden: requires check-in capability</h3></div>")
+    end
 
     root = config.find_checkout_root()
     db_path = config.db_path(root)
@@ -109,18 +137,18 @@ function cgi.handle_request()
     schema.sync_all(db_path, root)
 
     author = os.getenv("FOSSIL_USER")
-    if not author or author == "" then
-        author = os.getenv("USER") or "anonymous"
+    if author == nil or author == "" then
+        author = default_value(os.getenv("USER"), "anonymous")
     end
 
     if path_info == "/register" then
         entity_type = params.type
-        if not entity_type or entity_type == "" then
+        if entity_type == nil or entity_type == "" then
             return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' parameter</h3></div>")
         end
 
         layout_json, err = schema.show_json(db_path, entity_type)
-        if not layout_json then
+        if layout_json == nil then
             return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
         end
 
@@ -134,7 +162,7 @@ function cgi.handle_request()
 
     if path_info == "/api/validate" and method == "POST" then
         entity_type = params.type
-        if not entity_type or entity_type == "" then
+        if entity_type == nil or entity_type == "" then
             return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type"}))
         end
         input = io.read("*all")
@@ -148,7 +176,7 @@ function cgi.handle_request()
 
     if path_info == "/api/submit" and method == "POST" then
         entity_type = params.type
-        if not entity_type or entity_type == "" then
+        if entity_type == nil or entity_type == "" then
             return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type"}))
         end
         input = io.read("*all")
@@ -161,7 +189,7 @@ function cgi.handle_request()
         response = {
             issues = batch_issues
         }
-        if created_ids then
+        if created_ids != nil then
             response.created_ids = created_ids
             response.success = true
         else

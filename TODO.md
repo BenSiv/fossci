@@ -14,16 +14,17 @@
       `/register`, `/api/autocomplete`, `/api/validate`, `/api/submit`
       (`src/cgi.lua`), including before-hook validation with structured
       per-row/field issues rendered by fossci itself
-- [ ] Package fossci's binary + config for deployment under Fossil's
-      `--extroot` directory (`doc/web/serverext.wiki` mechanism in the
-      Fossil tree) -- zero Fossil changes, pure deployment
-- [ ] Read `FOSSIL_USER` / `FOSSIL_CAPABILITIES` / `FOSSIL_NONCE` env vars
-      (already injected by Fossil's `/ext` dispatch) for identity/
-      capability context; enforce fossci-side authorization, since
-      `/ext/*` bypasses Fossil's own repo read-capability checks
-- [ ] Minimal Markdown wiki-page snippet (plain `<iframe>` embed)
+- [x] Package fossci's binary for deployment under Fossil's `--extroot`
+      directory (`bld/package_extroot.sh`); see doc/deployment.md
+- [x] Enforce fossci-side authorization from `FOSSIL_CAPABILITIES`
+      (requires Check-In capability `i`), since `/ext/*` bypasses
+      Fossil's own repo read-capability checks (`src/cgi.lua`)
+- [x] Minimal Markdown wiki-page snippet (plain `<iframe>` embed)
       demonstrating a registration table framed inside Fossil's own
-      navigation
+      navigation (doc/deployment.md)
+- [ ] Exercise the packaged deployment end to end against a real Fossil
+      server (manual verification so far; no automated integration test
+      yet -- tst/integration is still empty, see note below)
 - [ ] Fossil-backed schema and extension discovery: read `schemas/` and
       `extensions/` from the Fossil checkout fossci is deployed
       alongside -- no Fossil change needed, just reading tracked files

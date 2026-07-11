@@ -30,7 +30,10 @@ function run_before_hooks(db_path, entity_type, new_values, old_values, is_updat
         return issues
     end
 
-    event_name = is_update and "entity.before_update" or "entity.before_create"
+    event_name = "entity.before_create"
+    if is_update then
+        event_name = "entity.before_update"
+    end
 
     for dir_name in lfs.dir(ext_dir) do
         if dir_name != "." and dir_name != ".." then
@@ -39,14 +42,14 @@ function run_before_hooks(db_path, entity_type, new_values, old_values, is_updat
 
             if paths.file_exists(manifest_path) and paths.file_exists(main_path) then
                 manifest_file = io.open(manifest_path, "r")
-                if manifest_file then
+                if manifest_file != nil then
                     manifest_src = io.read(manifest_file, "*all")
                     io.close(manifest_file)
 
                     ok, manifest = sandbox.run(manifest_src, manifest_path, sandbox.data_env())
                     if ok and type(manifest) == "table" then
                         matches_event = false
-                        if manifest.events then
+                        if manifest.events != nil then
                             for _, ev in ipairs(manifest.events) do
                                 if ev == event_name then
                                     matches_event = true
@@ -56,7 +59,7 @@ function run_before_hooks(db_path, entity_type, new_values, old_values, is_updat
                         end
 
                         matches_entity = false
-                        if manifest.entity_types then
+                        if manifest.entity_types != nil then
                             for _, et in ipairs(manifest.entity_types) do
                                 if et == entity_type then
                                     matches_entity = true
@@ -67,7 +70,7 @@ function run_before_hooks(db_path, entity_type, new_values, old_values, is_updat
 
                         if matches_event and matches_entity then
                             main_file = io.open(main_path, "r")
-                            if main_file then
+                            if main_file != nil then
                                 main_src = io.read(main_file, "*all")
                                 io.close(main_file)
 
@@ -80,7 +83,7 @@ function run_before_hooks(db_path, entity_type, new_values, old_values, is_updat
                                         ctx = {}
                                         function ctx.query(target_type, filter)
                                             can_read = false
-                                            if manifest.capabilities and manifest.capabilities.read then
+                                            if manifest.capabilities != nil and manifest.capabilities.read != nil then
                                                 for _, cap in ipairs(manifest.capabilities.read) do
                                                     if cap == "entity" then
                                                         can_read = true
@@ -104,7 +107,10 @@ function run_before_hooks(db_path, entity_type, new_values, old_values, is_updat
                                             end
                                             q = q .. ";"
                                             rows = db.query(db_path, q)
-                                            return rows or {}
+                                            if rows == nil then
+                                                return {}
+                                            end
+                                            return rows
                                         end
 
                                         hook_ok, hook_issues = pcall(env.on_before, new_values, old_values, ctx)
@@ -310,7 +316,7 @@ function entity.create_batch(db_path, entity_type, rows_values, author, source)
     created_ids = {}
     for i, values in ipairs(rows_values) do
         id, issues = entity.create(db_path, entity_type, values, author, source)
-        if id then
+        if id != nil then
             table.insert(created_ids, id)
         else
             return nil, issues
@@ -452,7 +458,7 @@ function entity.do_entity(cmd_args, db_path)
         response = {
             issues = batch_issues
         }
-        if created_ids then
+        if created_ids != nil then
             response.created_ids = created_ids
             response.success = true
         else
