@@ -46,6 +46,35 @@ function parse_query(query_str)
     return params
 end
 
+-- Filters/reorders a schema layout's fields to a comma-separated
+-- allowlist, e.g. "?columns=lab_name,volume_ul" -- lets one embedded
+-- registration table show only a curated subset of a schema's fields,
+-- in a chosen order, the same way a Benchling entry's embedded
+-- registration_table note picks its own column list independent of
+-- the underlying entity schema's full field list. Unknown/mistyped
+-- column names are silently skipped; if that empties the list
+-- entirely, falls back to the full layout rather than showing nothing.
+function filter_layout_columns(layout, columns_param)
+    if columns_param == nil or columns_param == "" then
+        return layout
+    end
+    by_name = {}
+    for _, field in ipairs(layout.fields) do
+        by_name[field.name] = field
+    end
+    filtered_fields = {}
+    for wanted_name in string.gmatch(columns_param, "[^,]+") do
+        field = by_name[wanted_name]
+        if field != nil then
+            table.insert(filtered_fields, field)
+        end
+    end
+    if #filtered_fields == 0 then
+        return layout
+    end
+    return {name = layout.name, fields = filtered_fields}
+end
+
 -- The `entry` query param is the embedding notebook entry's identifier
 -- (a wiki page name/URL, whatever the client sent) -- see doc/architecture.md
 -- and ledger.lua's source_notebook_entry_id. Optional: absent when
@@ -159,10 +188,12 @@ function cgi.handle_request()
             return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' parameter</h3></div>")
         end
 
-        layout_json, err = schema.show_json(db_path, entity_type)
-        if layout_json == nil then
+        layout, err = schema.layout(db_path, entity_type)
+        if layout == nil then
             return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
         end
+        layout = filter_layout_columns(layout, params.columns)
+        layout_json = json.encode(layout)
 
         body = html.render(entity_type, layout_json, default_value(os.getenv("FOSSIL_NONCE"), ""))
         return print_response("200 OK", "text/html", body)
