@@ -24,6 +24,7 @@ function init.do_init(cmd_args, root)
     paths.create_dir_if_not_exists(config.schemas_dir(root))
     paths.create_dir_if_not_exists(config.extensions_dir(root))
     paths.create_dir_if_not_exists(config.views_dir(root))
+    paths.create_dir_if_not_exists(config.templates_dir(root))
 
     db_path = config.db_path(root)
     ledger.init_schema(db_path)

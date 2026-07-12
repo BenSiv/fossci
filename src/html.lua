@@ -25,29 +25,29 @@ function html.render(entity_type, layout_json, nonce)
     <style>
         .fossci-container {
             font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: #334155;
+            color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
             border-radius: 16px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1200px;
-            border: 1px solid #f1f5f9;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
         }
         .fossci-header {
             margin-bottom: 24px;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9);
             padding-bottom: 16px;
         }
         .fossci-header h2 {
             margin: 0 0 6px 0;
             font-size: 1.6rem;
             font-weight: 700;
-            color: #0f172a;
+            color: var(--fossci-heading, #0f172a);
             letter-spacing: -0.02em;
         }
         .fossci-header p {
-            color: #64748b;
+            color: var(--fossci-muted, #64748b);
             margin: 0;
             font-size: 0.95rem;
         }
@@ -58,10 +58,10 @@ function html.render(entity_type, layout_json, nonce)
         .fossci-table-wrapper {
             overflow-x: auto;
             margin-bottom: 24px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--fossci-border, #e2e8f0);
             border-radius: 12px;
             box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.02);
-            background: #f8fafc;
+            background: var(--fossci-bg, #f8fafc);
         }
         #registration-table {
             width: 100%%;
@@ -72,16 +72,16 @@ function html.render(entity_type, layout_json, nonce)
         #registration-table th, #registration-table td {
             padding: 14px 16px;
             text-align: left;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--fossci-border, #e2e8f0);
         }
         #registration-table th {
-            background: #f1f5f9;
+            background: var(--fossci-bg-2, #f1f5f9);
             font-weight: 600;
             font-size: 0.8rem;
-            color: #475569;
+            color: var(--fossci-th-text, #475569);
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid var(--fossci-border, #e2e8f0);
         }
         #registration-table th:first-child { border-top-left-radius: 10px; }
         #registration-table th:last-child  { border-top-right-radius: 10px; }
@@ -97,16 +97,16 @@ function html.render(entity_type, layout_json, nonce)
         .cell-input {
             width: 100%%;
             padding: 9px 12px;
-            border: 1px solid #cbd5e1;
+            border: 1px solid var(--fossci-border-2, #cbd5e1);
             border-radius: 8px;
             font-size: 0.9rem;
             background: #ffffff;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             box-sizing: border-box;
-            color: #1e293b;
+            color: var(--fossci-input-text, #1e293b);
         }
         .cell-input:focus {
-            border-color: #6366f1;
+            border-color: var(--fossci-accent-2, #6366f1);
             outline: none;
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
             background: #fff;
@@ -129,7 +129,7 @@ function html.render(entity_type, layout_json, nonce)
             left: 0;
             right: 0;
             background: #ffffff;
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--fossci-border, #e2e8f0);
             border-radius: 8px;
             max-height: 220px;
             overflow-y: auto;
@@ -143,9 +143,9 @@ function html.render(entity_type, layout_json, nonce)
             cursor: pointer;
             font-size: 0.85rem;
             transition: all 0.15s ease;
-            color: #334155;
+            color: var(--fossci-text, #334155);
         }
-        .autocomplete-item:hover { background: #f1f5f9; color: #0f172a; }
+        .autocomplete-item:hover { background: var(--fossci-bg-2, #f1f5f9); color: var(--fossci-heading, #0f172a); }
         .fossci-actions {
             display: flex;
             gap: 14px;
@@ -165,21 +165,21 @@ function html.render(entity_type, layout_json, nonce)
             justify-content: center;
         }
         .btn-primary {
-            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            background: linear-gradient(135deg, var(--fossci-accent, #4f46e5), var(--fossci-accent-2, #6366f1));
             color: #ffffff;
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
         }
         .btn-primary:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3); filter: brightness(1.05); }
         .btn-primary:active { transform: scale(0.98); }
         .btn-secondary {
-            background: #f8fafc;
-            color: #475569;
-            border: 1px solid #e2e8f0;
+            background: var(--fossci-bg, #f8fafc);
+            color: var(--fossci-th-text, #475569);
+            border: 1px solid var(--fossci-border, #e2e8f0);
         }
-        .btn-secondary:hover { background: #f1f5f9; color: #0f172a; }
+        .btn-secondary:hover { background: var(--fossci-bg-2, #f1f5f9); color: var(--fossci-heading, #0f172a); }
         .btn-delete {
             background: transparent;
-            color: #94a3b8;
+            color: var(--fossci-muted-2, #94a3b8);
             font-size: 1.25rem;
             cursor: pointer;
             transition: color 0.15s ease;
@@ -512,7 +512,7 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
 
     body_rows = ""
     for _, row in ipairs(rows) do
-        cells = "<td><a href=\"fossci/detail?type=" .. escaped_type .. "&id=" .. tostring(row.id) ..
+        cells = "<td><a href=\"fossci/detail?type=" .. escaped_type .. "&entity_id=" .. tostring(row.id) ..
             "\">#" .. tostring(row.id) .. "</a></td>"
         for _, field in ipairs(layout.fields) do
             cells = cells .. "<td>" .. display_value(row[field.name]) .. "</td>"
@@ -550,26 +550,26 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
     <style>
         .fossci-container {
             font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: #334155;
+            color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
             border-radius: 16px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1200px;
-            border: 1px solid #f1f5f9;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
         }
         .fossci-header {
             margin-bottom: 24px;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9);
             padding-bottom: 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
-        .fossci-header p { color: #64748b; margin: 0; font-size: 0.95rem; }
-        .fossci-header a { color: #4f46e5; text-decoration: none; font-weight: 600; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
+        .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
+        .fossci-header a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
         .fossci-header a:hover { text-decoration: underline; }
         .btn {
             padding: 10px 20px;
@@ -582,40 +582,40 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
             text-decoration: none;
         }
         .btn-primary {
-            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            background: linear-gradient(135deg, var(--fossci-accent, #4f46e5), var(--fossci-accent-2, #6366f1));
             color: #ffffff;
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
         }
         .fossci-table-wrapper {
             overflow-x: auto;
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--fossci-border, #e2e8f0);
             border-radius: 12px;
-            background: #f8fafc;
+            background: var(--fossci-bg, #f8fafc);
         }
         #browse-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 600px; }
         #browse-table th, #browse-table td {
             padding: 12px 16px;
             text-align: left;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--fossci-border, #e2e8f0);
             font-size: 0.9rem;
         }
         #browse-table th {
-            background: #f1f5f9;
+            background: var(--fossci-bg-2, #f1f5f9);
             font-weight: 600;
             font-size: 0.78rem;
-            color: #475569;
+            color: var(--fossci-th-text, #475569);
             text-transform: uppercase;
             letter-spacing: 0.06em;
         }
         #browse-table td { background: #ffffff; }
-        #browse-table a { color: #4f46e5; text-decoration: none; font-weight: 600; }
+        #browse-table a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
         #browse-table a:hover { text-decoration: underline; }
         .fossci-empty {
             padding: 32px;
             text-align: center;
-            color: #64748b;
-            background: #f8fafc;
-            border: 1px dashed #e2e8f0;
+            color: var(--fossci-muted, #64748b);
+            background: var(--fossci-bg, #f8fafc);
+            border: 1px dashed var(--fossci-border, #e2e8f0);
             border-radius: 12px;
         }
         .fossci-pager {
@@ -624,10 +624,10 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
             align-items: center;
             margin-top: 16px;
             font-size: 0.85rem;
-            color: #64748b;
+            color: var(--fossci-muted, #64748b);
         }
         .fossci-pager-links { display: flex; gap: 14px; align-items: center; }
-        .fossci-pager-links a { color: #4f46e5; text-decoration: none; font-weight: 600; }
+        .fossci-pager-links a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
         .fossci-pager-links a:hover { text-decoration: underline; }
     </style>
 
@@ -676,46 +676,46 @@ function html.render_detail(entity_type, layout, row, history)
     <style>
         .fossci-container {
             font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: #334155;
+            color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
             border-radius: 16px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1200px;
-            border: 1px solid #f1f5f9;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
         }
-        .fossci-header { margin-bottom: 24px; border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; }
-        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
-        .fossci-header a { color: #4f46e5; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+        .fossci-header { margin-bottom: 24px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
+        .fossci-header a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; font-size: 0.9rem; }
         .fossci-header a:hover { text-decoration: underline; }
-        .fossci-subheading { font-size: 1.05rem; color: #0f172a; margin: 28px 0 14px 0; }
+        .fossci-subheading { font-size: 1.05rem; color: var(--fossci-heading, #0f172a); margin: 28px 0 14px 0; }
         .fossci-detail-fields {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
             gap: 16px 24px;
             padding: 20px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: var(--fossci-bg, #f8fafc);
+            border: 1px solid var(--fossci-border, #e2e8f0);
             border-radius: 12px;
         }
         .detail-row { display: flex; flex-direction: column; gap: 4px; }
-        .detail-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; font-weight: 600; }
-        .detail-value { font-size: 0.95rem; color: #0f172a; word-break: break-word; }
-        .fossci-table-wrapper { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+        .detail-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fossci-muted, #64748b); font-weight: 600; }
+        .detail-value { font-size: 0.95rem; color: var(--fossci-heading, #0f172a); word-break: break-word; }
+        .fossci-table-wrapper { overflow-x: auto; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 12px; background: var(--fossci-bg, #f8fafc); }
         #history-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 700px; }
         #history-table th, #history-table td {
             padding: 12px 16px;
             text-align: left;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--fossci-border, #e2e8f0);
             font-size: 0.85rem;
             vertical-align: top;
         }
         #history-table th {
-            background: #f1f5f9;
+            background: var(--fossci-bg-2, #f1f5f9);
             font-weight: 600;
             font-size: 0.75rem;
-            color: #475569;
+            color: var(--fossci-th-text, #475569);
             text-transform: uppercase;
             letter-spacing: 0.06em;
         }
@@ -786,26 +786,26 @@ function html.render_view(view_def, rows)
     <style>
         .fossci-container {
             font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: #334155;
+            color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
             border-radius: 16px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1200px;
-            border: 1px solid #f1f5f9;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
         }
-        .fossci-header { margin-bottom: 24px; border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; }
-        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
-        .fossci-header p { color: #64748b; margin: 0; font-size: 0.95rem; }
-        .fossci-table-wrapper { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+        .fossci-header { margin-bottom: 24px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
+        .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
+        .fossci-table-wrapper { overflow-x: auto; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 12px; background: var(--fossci-bg, #f8fafc); }
         #view-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 600px; }
-        #view-table th, #view-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+        #view-table th, #view-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--fossci-border, #e2e8f0); font-size: 0.9rem; }
         #view-table th {
-            background: #f1f5f9;
+            background: var(--fossci-bg-2, #f1f5f9);
             font-weight: 600;
             font-size: 0.78rem;
-            color: #475569;
+            color: var(--fossci-th-text, #475569);
             text-transform: uppercase;
             letter-spacing: 0.06em;
         }
@@ -813,9 +813,9 @@ function html.render_view(view_def, rows)
         .fossci-empty {
             padding: 32px;
             text-align: center;
-            color: #64748b;
-            background: #f8fafc;
-            border: 1px dashed #e2e8f0;
+            color: var(--fossci-muted, #64748b);
+            background: var(--fossci-bg, #f8fafc);
+            border: 1px dashed var(--fossci-border, #e2e8f0);
             border-radius: 12px;
         }
     </style>
@@ -851,28 +851,28 @@ function html.render_index(entity_types)
     <style>
         .fossci-container {
             font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: #334155;
+            color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
             border-radius: 16px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 800px;
-            border: 1px solid #f1f5f9;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
         }
-        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; }
-        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
-        .fossci-header p { color: #64748b; margin: 0; font-size: 0.95rem; }
+        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
+        .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
         .fossci-index-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-        .fossci-index-list li { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; }
-        .fossci-index-list a { display: block; padding: 12px 16px; color: #4f46e5; text-decoration: none; font-weight: 600; text-transform: capitalize; }
-        .fossci-index-list a:hover { background: #f1f5f9; }
+        .fossci-index-list li { background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; }
+        .fossci-index-list a { display: block; padding: 12px 16px; color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; text-transform: capitalize; }
+        .fossci-index-list a:hover { background: var(--fossci-bg-2, #f1f5f9); }
         .fossci-empty {
             padding: 32px;
             text-align: center;
-            color: #64748b;
-            background: #f8fafc;
-            border: 1px dashed #e2e8f0;
+            color: var(--fossci-muted, #64748b);
+            background: var(--fossci-bg, #f8fafc);
+            border: 1px dashed var(--fossci-border, #e2e8f0);
             border-radius: 12px;
         }
     </style>
@@ -885,6 +885,140 @@ function html.render_index(entity_types)
     </div>
 </div>
 """, #entity_types, list_or_empty)
+end
+
+-- Every entry template found (whether it loaded cleanly or not), each
+-- linking to /template?name=... where the actual snippet is rendered.
+function html.render_templates_list(entries)
+    items = ""
+    for _, entry in ipairs(entries) do
+        escaped_name = html_escape(entry.name)
+        if entry.def == nil then
+            items = items .. "<li class=\"fossci-template-error\">" .. escaped_name ..
+                " -- ERROR: " .. html_escape(entry.err) .. "</li>"
+        else
+            label = entry.def.label
+            if label == nil then
+                label = entry.name
+            end
+            description = entry.def.description
+            if description == nil then
+                description = ""
+            end
+            escaped_label = html_escape(label)
+            escaped_desc = html_escape(description)
+            items = items .. "<li><a href=\"fossci/template?template_name=" .. escaped_name .. "\">" ..
+                escaped_label .. "</a><p>" .. escaped_desc .. "</p></li>"
+        end
+    end
+
+    list_or_empty = "<ul class=\"fossci-index-list\">" .. items .. "</ul>"
+    if #entries == 0 then
+        list_or_empty = "<p class=\"fossci-empty\">No entry templates yet.</p>"
+    end
+
+    return string.format("""
+<div class="fossil-doc" data-title="Entry templates">
+    <style>
+        .fossci-container {
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--fossci-text, #334155);
+            background: #ffffff;
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin: 20px auto;
+            max-width: 800px;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
+        }
+        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
+        .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
+        .fossci-index-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+        .fossci-index-list li { background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; padding: 14px 16px; }
+        .fossci-index-list a { font-weight: 700; color: var(--fossci-accent, #4f46e5); text-decoration: none; }
+        .fossci-index-list a:hover { text-decoration: underline; }
+        .fossci-index-list p { margin: 6px 0 0 0; color: var(--fossci-muted, #64748b); font-size: 0.88rem; }
+        .fossci-template-error { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 16px; }
+        .fossci-empty {
+            padding: 32px;
+            text-align: center;
+            color: var(--fossci-muted, #64748b);
+            background: var(--fossci-bg, #f8fafc);
+            border: 1px dashed var(--fossci-border, #e2e8f0);
+            border-radius: 12px;
+        }
+    </style>
+    <div class="fossci-container">
+        <div class="fossci-header">
+            <h2>Entry templates</h2>
+            <p>Pick a template, copy the generated snippet, and paste it into a new wiki page you create.</p>
+        </div>
+        %s
+    </div>
+</div>
+""", list_or_empty)
+end
+
+-- The rendered Markdown snippet for one template, in a read-only
+-- textarea for easy select-all-and-copy -- no JS needed (a "Copy"
+-- button would need one, and this is simple enough not to bother).
+function html.render_template(def, rendered_markdown)
+    label = def.label
+    if label == nil then
+        label = def.name
+    end
+    description = def.description
+    if description == nil then
+        description = ""
+    end
+    escaped_label = html_escape(label)
+    escaped_desc = html_escape(description)
+    escaped_body = html_escape(rendered_markdown)
+
+    return string.format("""
+<div class="fossil-doc" data-title="Template: %s">
+    <style>
+        .fossci-container {
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--fossci-text, #334155);
+            background: #ffffff;
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin: 20px auto;
+            max-width: 900px;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
+        }
+        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
+        .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
+        .fossci-header a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
+        .fossci-header a:hover { text-decoration: underline; }
+        .fossci-snippet {
+            width: 100%%;
+            min-height: 360px;
+            box-sizing: border-box;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.88rem;
+            padding: 16px;
+            border: 1px solid var(--fossci-border, #e2e8f0);
+            border-radius: 12px;
+            background: var(--fossci-bg, #f8fafc);
+            color: var(--fossci-input-text, #1e293b);
+        }
+    </style>
+    <div class="fossci-container">
+        <div class="fossci-header">
+            <h2>%s</h2>
+            <p>%s</p>
+            <p><a href="fossci/templates">&larr; All templates</a></p>
+        </div>
+        <p>Click inside, select all (Ctrl/Cmd+A), copy, then paste into a new wiki page (Fossil: All pages &rarr; New).</p>
+        <textarea class="fossci-snippet" readonly>%s</textarea>
+    </div>
+</div>
+""", escaped_label, escaped_label, escaped_desc, escaped_body)
 end
 
 return html

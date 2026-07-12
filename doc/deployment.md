@@ -75,6 +75,22 @@ fork/checkout; `POST /ext/fossci/api/validate` and `.../api/submit` will
 hang indefinitely on a Fossil build without the fix. GET-only endpoints
 (`register`, `autocomplete`) are unaffected.
 
+### Reserved query parameter names
+
+Confirmed directly, reproducibly: a request to `/ext/fossci/whatever?name=X`
+fails with Fossil's own `404 Not Found: path does not match any file or
+script` -- the same error produced when `--extroot` itself is misconfigured
+-- even though the extension is set up correctly and the request never
+reaches fossci at all. Fossil's `/ext` relay reads the sub-path to relay to
+from a CGI parameter literally named `name`, and query-string parameters
+get folded into the *same* CGI parameter table before `ext_page()` runs, so
+a real `?name=...` in the URL clobbers Fossil's own internal value. `id` was
+suspected of the same issue during development but did not reproduce on
+closer testing; `type`, `columns`, `entry`, and `page` are confirmed safe.
+Bottom line: don't name a fossci query parameter `name` (or, to be safe,
+anything you haven't checked). fossci's own routes use `view_name`/
+`template_name`/`entity_id` instead, precisely to avoid this.
+
 ### Authorization
 
 `/ext/*` bypasses Fossil's own per-repo read-capability check (Fossil

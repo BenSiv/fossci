@@ -4,6 +4,7 @@ schema = require("schema")
 entity = require("entity")
 ledger = require("ledger")
 view = require("view")
+template = require("template")
 html = require("html")
 layout = require("layout")
 json = require("dkjson")
@@ -182,6 +183,7 @@ function cgi.handle_request()
         paths.create_dir_if_not_exists(config.schemas_dir(root))
         paths.create_dir_if_not_exists(config.extensions_dir(root))
         paths.create_dir_if_not_exists(config.views_dir(root))
+        paths.create_dir_if_not_exists(config.templates_dir(root))
         ledger.init_schema(db_path)
     end
     schema.sync_all(db_path, root)
@@ -249,9 +251,21 @@ function cgi.handle_request()
 
     if path_info == "/detail" then
         entity_type = params.type
-        entity_id = tonumber(params.id)
+        -- Named "entity_id", not "id": Fossil's own /ext relay
+        -- conflates the query string with its internal CGI parameter
+        -- table (confirmed directly, reproducibly, for "name" -- see
+        -- /view and /template below, which genuinely 404 as "path does
+        -- not match any file or script" when called with a real
+        -- "?name=..." query param). "id" itself turned out NOT to
+        -- collide when re-checked with a real, valid id -- an earlier
+        -- test here was a false positive from testing against a
+        -- nonexistent id. Kept the "entity_id" rename anyway (harmless,
+        -- and avoids relying on an exhaustive list of every other
+        -- Fossil-reserved name), but don't cite it as a second
+        -- confirmed collision.
+        entity_id = tonumber(params.entity_id)
         if entity_type == nil or entity_type == "" or entity_id == nil then
-            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' or 'id' parameter</h3></div>")
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' or 'entity_id' parameter</h3></div>")
         end
 
         layout, err = schema.layout(db_path, entity_type)
@@ -270,9 +284,9 @@ function cgi.handle_request()
     end
 
     if path_info == "/view" then
-        view_name = params.name
+        view_name = params.view_name -- not "name" -- see /detail's comment
         if view_name == nil or view_name == "" then
-            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'name' parameter</h3></div>")
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'view_name' parameter</h3></div>")
         end
 
         views_dir = config.views_dir(root)
@@ -289,6 +303,29 @@ function cgi.handle_request()
             return print_response("500 Internal Server Error", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
         end
         body = html.render_view(view_def, rows)
+        return print_response("200 OK", "text/html", body)
+    end
+
+    if path_info == "/templates" then
+        templates_dir = config.templates_dir(root)
+        body = html.render_templates_list(template.all(templates_dir))
+        return print_response("200 OK", "text/html", body)
+    end
+
+    if path_info == "/template" then
+        template_name = params.template_name -- not "name" -- see /detail's comment
+        if template_name == nil or template_name == "" then
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'template_name' parameter</h3></div>")
+        end
+
+        templates_dir = config.templates_dir(root)
+        template_def, err = template.load(templates_dir, template_name)
+        if template_def == nil then
+            return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
+        end
+
+        rendered = template.render(template_def)
+        body = html.render_template(template_def, rendered)
         return print_response("200 OK", "text/html", body)
     end
 
@@ -336,9 +373,9 @@ function cgi.handle_request()
 
     if path_info == "/api/update" and method == "POST" then
         entity_type = params.type
-        entity_id = tonumber(params.id)
+        entity_id = tonumber(params.entity_id) -- not "id" -- see /detail's comment
         if entity_type == nil or entity_type == "" or entity_id == nil then
-            return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type or id"}))
+            return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type or entity_id"}))
         end
         input = io.read("*all")
         values, _, err = json.decode(input)
