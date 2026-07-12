@@ -16,17 +16,26 @@
 --           {label = "Notebook", url = "/wiki", capability = "*"},
 --       },
 --       extra_css = "nav.mainmenu { ... }",
+--       custom_js_path = "assets/wikiedit-wysiwyg.js",
+--       footer_extra = "<script src=\"/script.js\"></script>",
 --   }
 --
--- `extra_css` is appended to whatever Fossil's own "css" config value
--- already contains (idempotently, marked by a fixed comment pair), not
--- a replacement -- Fossil's "css" setting is normally the *entire*
--- stylesheet, and fossci has no reliable way to read the compiled-in
--- default from Luam. A deployment that wants extra_css to take visible
--- effect must have already seeded a real base stylesheet once (e.g. via
--- Fossil's own /setup_skinedit, or by copying the Fossil build's
--- pub/skins/default/css.txt into that setting) -- a one-time, Fossil-side
--- admin action, same category as setting --extroot itself.
+-- `extra_css`/`footer_extra` are appended to whatever Fossil's own
+-- "css"/"footer" config values already contain (idempotently, each
+-- marked by its own fixed comment pair), not a replacement -- both are
+-- normally Fossil's *entire* value for that setting, and fossci has no
+-- reliable way to read the compiled-in default from Luam. A deployment
+-- that wants either to take visible effect must have already seeded a
+-- real base value once (e.g. via Fossil's own /setup_skinedit, or by
+-- copying the matching pub/skins/default/{css,footer}.txt content into
+-- that setting) -- a one-time, Fossil-side admin action, same category
+-- as setting --extroot itself.
+--
+-- `custom_js_path` reads a JS file from the checkout and merges it into
+-- Fossil's own "js" setting, served at /script.js -- nothing on any
+-- page loads that by default, so it's typically paired with
+-- footer_extra adding a <script src="/script.js"> tag (once a base
+-- footer has been seeded, per above).
 
 paths = require("paths")
 sandbox = require("sandbox")
@@ -36,6 +45,10 @@ layout = {}
 
 CSS_MARKER_START = "/* fossci-layout:extra_css:start */"
 CSS_MARKER_END = "/* fossci-layout:extra_css:end */"
+JS_MARKER_START = "/* fossci-layout:custom_js:start */"
+JS_MARKER_END = "/* fossci-layout:custom_js:end */"
+FOOTER_MARKER_START = "<!-- fossci-layout:footer_extra:start -->"
+FOOTER_MARKER_END = "<!-- fossci-layout:footer_extra:end -->"
 
 function layout.load(root)
     path = config_layout_path(root)
@@ -158,20 +171,50 @@ function sync_logo(root, repo_fossil, def)
     set_config(repo_fossil, "logo-mimetype", mimetype)
 end
 
-function merge_css(repo_fossil, extra_css)
-    rows = db.query(repo_fossil, "SELECT value FROM config WHERE name = 'css';")
+-- Shared by css/js/footer: each is normally Fossil's *entire* value for
+-- that setting (there's no reliable way for fossci to read the
+-- compiled-in default from Luam -- see the file header), so a
+-- deployment that wants any of these fields to take visible effect
+-- must have already seeded a real base value once (e.g. via Fossil's
+-- own /setup_skinedit, or by copying the matching pub/skins/default/*
+-- file's content into that setting) -- a one-time, Fossil-side admin
+-- action, same category as setting --extroot itself. Idempotent: strips
+-- anything from a previous sync's marker onward before appending fresh,
+-- so re-syncing never duplicates.
+-- Reads a JS file from the checkout (or an absolute path) and merges
+-- its content into Fossil's own "js" setting (served at /script.js --
+-- see doc/deployment.md). Fossil doesn't reference /script.js from any
+-- page by default; something (typically footer_extra, appending a
+-- <script src="/script.js"> tag) has to actually load it for this to
+-- run anywhere.
+function sync_custom_js(root, repo_fossil, def)
+    path = def.custom_js_path
+    if string.sub(path, 1, 1) != "/" then
+        path = paths.joinpath(root, path)
+    end
+    file = io.open(path, "r")
+    if file == nil then
+        return
+    end
+    data = io.read(file, "*all")
+    io.close(file)
+    merge_config_text(repo_fossil, "js", data, JS_MARKER_START, JS_MARKER_END)
+end
+
+function merge_config_text(repo_fossil, config_name, extra_text, marker_start, marker_end)
+    rows = db.query(repo_fossil, string.format("SELECT value FROM config WHERE name = %s;", db.quote(config_name)))
     current = ""
     if rows != nil and rows[1] != nil and rows[1].value != nil then
         current = rows[1].value
     end
 
-    start_pos = string.find(current, CSS_MARKER_START, 1, true)
+    start_pos = string.find(current, marker_start, 1, true)
     if start_pos != nil then
         current = string.sub(current, 1, start_pos - 1)
     end
 
-    new_css = current .. CSS_MARKER_START .. "\n" .. extra_css .. "\n" .. CSS_MARKER_END .. "\n"
-    set_config(repo_fossil, "css", new_css)
+    new_value = current .. marker_start .. "\n" .. extra_text .. "\n" .. marker_end .. "\n"
+    set_config(repo_fossil, config_name, new_value)
 end
 
 -- Applies `def` (as returned by layout.load) to the Fossil repository
@@ -196,7 +239,13 @@ function layout.sync(repo_fossil, def, root)
         set_config(repo_fossil, "mainmenu", build_mainmenu_text(def.nav))
     end
     if def.extra_css != nil then
-        merge_css(repo_fossil, def.extra_css)
+        merge_config_text(repo_fossil, "css", def.extra_css, CSS_MARKER_START, CSS_MARKER_END)
+    end
+    if def.custom_js_path != nil then
+        sync_custom_js(root, repo_fossil, def)
+    end
+    if def.footer_extra != nil then
+        merge_config_text(repo_fossil, "footer", def.footer_extra, FOOTER_MARKER_START, FOOTER_MARKER_END)
     end
 end
 
