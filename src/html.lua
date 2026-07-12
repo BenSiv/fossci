@@ -1062,6 +1062,11 @@ function html.render_sql(sql_text, column_names, rows, err)
                 header_cells .. "</tr></thead><tbody>" .. body_rows .. "</tbody></table></div>" ..
                 "<p class=\"fossci-sql-count\">" .. tostring(#rows) .. " rows</p>"
         end
+    elseif sql_text_or_empty == "" then
+        -- Submitted with a genuinely empty box -- distinct from the
+        -- pre-run, example-prefilled first-load case below, which
+        -- needs no message at all (nothing has failed or been skipped).
+        result_html = "<p class=\"fossci-empty\">Enter a SQL query above, then click Run.</p>"
     end
 
     return string.format("""

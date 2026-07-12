@@ -321,11 +321,20 @@ function cgi.handle_request()
             return print_response("403 Forbidden", "text/html", "<div class='fossil-doc'><h3>Forbidden: requires Setup or Admin capability</h3></div>")
         end
 
+        -- "q" absent entirely (bare /sql, never submitted) vs. "q"
+        -- present-but-empty (form submitted with a blank box) are
+        -- different cases -- distinguish them so a bare visit shows a
+        -- real, runnable example instead of a query that only ever
+        -- existed as unsubmitted placeholder text, and an actual empty
+        -- submission gets a visible hint instead of silently doing
+        -- nothing (which looked exactly like "ran it, got zero rows").
         sql_text = params.q
         column_names = nil
         rows = nil
         sql_err = nil
-        if sql_text != nil and sql_text != "" then
+        if sql_text == nil then
+            sql_text = "SELECT * FROM sample LIMIT 20;"
+        elseif sql_text != "" then
             column_names, rows, sql_err = view.run_adhoc(db_path, sql_text)
         end
         body = html.render_sql(sql_text, column_names, rows, sql_err)
