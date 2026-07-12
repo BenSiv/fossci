@@ -198,6 +198,31 @@ function cgi.handle_request()
         return print_response("200 OK", "application/json", json.encode(response))
     end
 
+    if path_info == "/api/update" and method == "POST" then
+        entity_type = params.type
+        entity_id = tonumber(params.id)
+        if entity_type == nil or entity_type == "" or entity_id == nil then
+            return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type or id"}))
+        end
+        input = io.read("*all")
+        values, _, err = json.decode(input)
+        if values == nil then
+            return print_response("400 Bad Request", "application/json", json.encode({error = "Invalid JSON: " .. tostring(err)}))
+        end
+
+        updated_id, issues = entity.update(db_path, entity_type, entity_id, values, author)
+        response = {
+            issues = issues
+        }
+        if updated_id != nil then
+            response.updated_id = updated_id
+            response.success = true
+        else
+            response.success = false
+        end
+        return print_response("200 OK", "application/json", json.encode(response))
+    end
+
     return print_response("404 Not Found", "text/plain", "Not Found")
 end
 

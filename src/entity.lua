@@ -431,6 +431,27 @@ function entity.do_entity(cmd_args, db_path)
         return
     end
 
+    if action == "update" then
+        entity_type = cmd_args[2]
+        id = tonumber(cmd_args[3])
+        if entity_type == nil or id == nil then
+            print("Usage: fossci entity update <type> <id> field=value [field=value ...]")
+            return
+        end
+        values = parse_kv_args(cmd_args, 4)
+        updated_id, issues = entity.update(db_path, entity_type, id, values, os.getenv("USER"))
+        if updated_id == nil then
+            print("Update failed:")
+            print_issues(issues)
+            return
+        end
+        print(string.format("Updated %s #%d", entity_type, updated_id))
+        if #issues > 0 then
+            print_issues(issues)
+        end
+        return
+    end
+
     if action == "list" then
         entity_type = cmd_args[2]
         if entity_type == nil then
@@ -505,7 +526,35 @@ function entity.do_entity(cmd_args, db_path)
         return
     end
 
-    print("Usage: fossci entity <create|list|show|validate-json|create-json> [args]")
+    if action == "update-json" then
+        entity_type = cmd_args[2]
+        id = tonumber(cmd_args[3])
+        if entity_type == nil or id == nil then
+            print("Usage: fossci entity update-json <type> <id>")
+            return
+        end
+        input = io.read("*all")
+        values, _, err = json.decode(input)
+        if values == nil then
+            print(json.encode({error = "Invalid JSON input: " .. tostring(err)}))
+            return
+        end
+        author = os.getenv("USER")
+        updated_id, issues = entity.update(db_path, entity_type, id, values, author)
+        response = {
+            issues = issues
+        }
+        if updated_id != nil then
+            response.updated_id = updated_id
+            response.success = true
+        else
+            response.success = false
+        end
+        print(json.encode(response))
+        return
+    end
+
+    print("Usage: fossci entity <create|list|show|update|validate-json|create-json|update-json> [args]")
 end
 
 -- CLI entry point: `fossci extension <list|show|approve|revoke|run-pending> [args]`
