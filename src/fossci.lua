@@ -20,6 +20,9 @@ do_extension = entity.do_extension
 ledger = require("ledger")
 do_ledger = ledger.do_ledger
 
+view = require("view")
+do_view = view.do_view
+
 cgi = require("cgi")
 
 function main()
@@ -44,6 +47,7 @@ function main()
         ["entity"] = do_entity,
         ["ledger"] = do_ledger,
         ["extension"] = do_extension,
+        ["view"] = do_view,
     }
 
     arg[-1] = "lua"

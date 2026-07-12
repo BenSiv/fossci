@@ -74,6 +74,13 @@ function config.extensions_dir(root)
     return paths.joinpath(root, "extensions")
 end
 
+function config.views_dir(root)
+    if root == nil then
+        root = config.find_checkout_root()
+    end
+    return paths.joinpath(root, "views")
+end
+
 function config.is_initialized(root)
     return paths.file_exists(config.db_path(root))
 end

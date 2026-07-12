@@ -715,4 +715,88 @@ function html.render_detail(entity_type, layout, row, history)
 """, escaped_type, id_str, escaped_type, id_str, escaped_type, fields_html, history_rows)
 end
 
+-- Generic view: any approved custom SQL view rendered as a table.
+-- Unlike browse/detail, columns come from the view's own declared
+-- `columns` list (name/label), not a schema -- a view can join/select
+-- across entity types, so there's no single schema to draw from.
+function html.render_view(view_def, rows)
+    title = view_def.title
+    if title == nil then
+        title = view_def.name
+    end
+    escaped_title = html_escape(title)
+
+    header_cells = ""
+    for _, col in ipairs(view_def.columns) do
+        label = col.label
+        if label == nil then
+            label = col.name
+        end
+        header_cells = header_cells .. "<th>" .. html_escape(label) .. "</th>"
+    end
+
+    body_rows = ""
+    for _, row in ipairs(rows) do
+        cells = ""
+        for _, col in ipairs(view_def.columns) do
+            cells = cells .. "<td>" .. display_value(row[col.name]) .. "</td>"
+        end
+        body_rows = body_rows .. "<tr>" .. cells .. "</tr>"
+    end
+
+    table_or_empty = "<div class=\"fossci-table-wrapper\"><table id=\"view-table\"><thead><tr>" ..
+        header_cells .. "</tr></thead><tbody>" .. body_rows .. "</tbody></table></div>"
+    if #rows == 0 then
+        table_or_empty = "<p class=\"fossci-empty\">No rows.</p>"
+    end
+
+    return string.format("""
+<div class="fossil-doc" data-title="%s">
+    <style>
+        .fossci-container {
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #334155;
+            background: #ffffff;
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin: 20px auto;
+            max-width: 1200px;
+            border: 1px solid #f1f5f9;
+        }
+        .fossci-header { margin-bottom: 24px; border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
+        .fossci-header p { color: #64748b; margin: 0; font-size: 0.95rem; }
+        .fossci-table-wrapper { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+        #view-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 600px; }
+        #view-table th, #view-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+        #view-table th {
+            background: #f1f5f9;
+            font-weight: 600;
+            font-size: 0.78rem;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        #view-table td { background: #ffffff; }
+        .fossci-empty {
+            padding: 32px;
+            text-align: center;
+            color: #64748b;
+            background: #f8fafc;
+            border: 1px dashed #e2e8f0;
+            border-radius: 12px;
+        }
+    </style>
+    <div class="fossci-container">
+        <div class="fossci-header">
+            <h2>%s</h2>
+            <p>%d rows</p>
+        </div>
+        %s
+    </div>
+</div>
+""", escaped_title, escaped_title, #rows, table_or_empty)
+end
+
 return html

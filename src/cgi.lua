@@ -3,6 +3,7 @@ config = require("config")
 schema = require("schema")
 entity = require("entity")
 ledger = require("ledger")
+view = require("view")
 html = require("html")
 json = require("dkjson")
 paths = require("paths")
@@ -173,6 +174,7 @@ function cgi.handle_request()
         paths.create_dir_if_not_exists(config.store_dir(root))
         paths.create_dir_if_not_exists(config.schemas_dir(root))
         paths.create_dir_if_not_exists(config.extensions_dir(root))
+        paths.create_dir_if_not_exists(config.views_dir(root))
         ledger.init_schema(db_path)
     end
     schema.sync_all(db_path, root)
@@ -234,6 +236,29 @@ function cgi.handle_request()
 
         history = ledger.history(db_path, entity_id)
         body = html.render_detail(entity_type, layout, row, history)
+        return print_response("200 OK", "text/html", body)
+    end
+
+    if path_info == "/view" then
+        view_name = params.name
+        if view_name == nil or view_name == "" then
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'name' parameter</h3></div>")
+        end
+
+        views_dir = config.views_dir(root)
+        view_def, err = view.load(views_dir, view_name)
+        if view_def == nil then
+            return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
+        end
+        if view.is_approved(db_path, view_def) == false then
+            return print_response("403 Forbidden", "text/html", "<div class='fossil-doc'><h3>Error: view '" .. html_escape(view_name) .. "' is not approved</h3></div>")
+        end
+
+        rows, err = view.run(db_path, view_def)
+        if rows == nil then
+            return print_response("500 Internal Server Error", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
+        end
+        body = html.render_view(view_def, rows)
         return print_response("200 OK", "text/html", body)
     end
 
