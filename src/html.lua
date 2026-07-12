@@ -1,6 +1,11 @@
 html = {}
 
-function html.render(entity_type, layout_json)
+-- `nonce` must be Fossil's own per-request CSP nonce (the FOSSIL_NONCE
+-- CGI env var Fossil already injects, see doc/architecture.md) --
+-- Fossil's page wrapper sets a strict `script-src 'self' 'nonce-...'`
+-- CSP, so an inline <script> without the matching nonce is silently
+-- blocked by the browser: the page loads, but no JS in it ever runs.
+function html.render(entity_type, layout_json, nonce)
     return string.format("""
 <div class="fossil-doc" data-title="Register %s">
     <style>
@@ -217,14 +222,14 @@ function html.render(entity_type, layout_json)
         </div>
 
         <div class="fossci-actions">
-            <button type="button" class="btn btn-secondary" onclick="addRow()">+ Add Row</button>
-            <button type="button" class="btn btn-primary"   onclick="submitBatch()">Submit Batch</button>
+            <button type="button" class="btn btn-secondary" id="btn-add-row">+ Add Row</button>
+            <button type="button" class="btn btn-primary"   id="btn-submit-batch">Submit Batch</button>
         </div>
 
         <div id="status-message" class="status-msg"></div>
     </div>
 
-    <script>
+    <script nonce="%s">
         const layout = %s;
         const entityType = "%s";
         const baseUrl = window.location.pathname.replace(/\/register\/?$/, "");
@@ -450,9 +455,11 @@ function html.render(entity_type, layout_json)
         }
 
         window.onload = initTable;
+        document.getElementById("btn-add-row").addEventListener("click", addRow);
+        document.getElementById("btn-submit-batch").addEventListener("click", submitBatch);
     </script>
 </div>
-""", entity_type, entity_type, layout_json, entity_type)
+""", entity_type, entity_type, nonce, layout_json, entity_type)
 end
 
 return html

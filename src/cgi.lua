@@ -152,7 +152,7 @@ function cgi.handle_request()
             return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
         end
 
-        body = html.render(entity_type, layout_json)
+        body = html.render(entity_type, layout_json, default_value(os.getenv("FOSSIL_NONCE"), ""))
         return print_response("200 OK", "text/html", body)
     end
 
