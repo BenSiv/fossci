@@ -311,6 +311,27 @@ function cgi.handle_request()
         return print_response("200 OK", "text/html", body)
     end
 
+    if path_info == "/sql" then
+        -- Setup or Admin only -- this runs arbitrary (SELECT-only)
+        -- SQL an authenticated user typed themselves, so gating it
+        -- behind the baseline "i" capability every other route uses
+        -- would be far too permissive.
+        capabilities = os.getenv("FOSSIL_CAPABILITIES")
+        if cgi.has_capability(capabilities, "s") == false and cgi.has_capability(capabilities, "a") == false then
+            return print_response("403 Forbidden", "text/html", "<div class='fossil-doc'><h3>Forbidden: requires Setup or Admin capability</h3></div>")
+        end
+
+        sql_text = params.q
+        column_names = nil
+        rows = nil
+        sql_err = nil
+        if sql_text != nil and sql_text != "" then
+            column_names, rows, sql_err = view.run_adhoc(db_path, sql_text)
+        end
+        body = html.render_sql(sql_text, column_names, rows, sql_err)
+        return print_response("200 OK", "text/html", body)
+    end
+
     if path_info == "/templates" then
         templates_dir = config.templates_dir(root)
         body = html.render_templates_list(template.all(templates_dir))

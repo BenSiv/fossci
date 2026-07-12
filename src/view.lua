@@ -272,6 +272,42 @@ function run_parameterized(db_path, def, param_value)
     return rows
 end
 
+-- Ad-hoc, unsaved SELECT execution against the entity store -- for
+-- one-off exploration, not embeddable/shareable content, so unlike a
+-- named view there's nothing to approve (the caller enforcing Setup/
+-- Admin capability -- see cgi.lua's /sql route -- already *is* the
+-- approval: nobody untrusted can reach this). Still SELECT-only via
+-- the same is_select_only guard, and returns column names separately
+-- from db.query's rows (which are unordered Lua tables keyed by
+-- column name) so results render with real, ordered headers even for
+-- an empty result set.
+function view.run_adhoc(db_path, sql_text)
+    if view.is_select_only(sql_text) == false then
+        return nil, nil, "refusing to run: not a plain SELECT"
+    end
+
+    sqlite3 = require("sqlite3")
+    conn = sqlite3.open(db_path)
+    if conn == nil then
+        return nil, nil, "cannot open database"
+    end
+
+    vm, err = sqlite3.prepare(conn, sql_text)
+    if vm == nil then
+        sqlite3.close(conn)
+        return nil, nil, "invalid sql: " .. tostring(err)
+    end
+
+    column_names = sqlite3.stmt.get_names(vm)
+    rows = {}
+    for row in sqlite3.stmt.nrows(vm) do
+        table.insert(rows, row)
+    end
+    sqlite3.stmt.finalize(vm)
+    sqlite3.close(conn)
+    return column_names, rows
+end
+
 -- CLI entry point: `fossci view <list|show|approve|revoke> [args]`
 function view.do_view(cmd_args, db_path)
     config = require("config")

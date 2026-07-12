@@ -1027,4 +1027,112 @@ function html.render_template(def, rendered_markdown)
 """, escaped_label, escaped_label, escaped_desc, escaped_body)
 end
 
+-- Ad-hoc SQL console (Setup/Admin only -- see cgi.lua's /sql route):
+-- a plain GET form (no JS needed, unlike register's autocomplete) so
+-- the query is a normal, bookmarkable/shareable URL. `column_names`/
+-- `rows` are nil until a query has been run; `err` is set instead if
+-- it failed (not select-only, invalid sql, etc.).
+function html.render_sql(sql_text, column_names, rows, err)
+    sql_text_or_empty = sql_text
+    if sql_text_or_empty == nil then
+        sql_text_or_empty = ""
+    end
+    escaped_sql = html_escape(sql_text_or_empty)
+
+    result_html = ""
+    if err != nil then
+        result_html = "<div class=\"fossci-sql-error\">Error: " .. html_escape(err) .. "</div>"
+    elseif rows != nil then
+        header_cells = ""
+        for _, name in ipairs(column_names) do
+            header_cells = header_cells .. "<th>" .. html_escape(name) .. "</th>"
+        end
+        body_rows = ""
+        for _, row in ipairs(rows) do
+            cells = ""
+            for _, name in ipairs(column_names) do
+                cells = cells .. "<td>" .. display_value(row[name]) .. "</td>"
+            end
+            body_rows = body_rows .. "<tr>" .. cells .. "</tr>"
+        end
+        if #rows == 0 then
+            result_html = "<p class=\"fossci-empty\">No rows.</p>"
+        else
+            result_html = "<div class=\"fossci-table-wrapper\"><table id=\"sql-table\"><thead><tr>" ..
+                header_cells .. "</tr></thead><tbody>" .. body_rows .. "</tbody></table></div>" ..
+                "<p class=\"fossci-sql-count\">" .. tostring(#rows) .. " rows</p>"
+        end
+    end
+
+    return string.format("""
+<div class="fossil-doc" data-title="Ad-hoc SQL">
+    <style>
+        .fossci-container {
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--fossci-text, #334155);
+            background: #ffffff;
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin: 20px auto;
+            max-width: 1100px;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
+        }
+        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
+        .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
+        .fossci-sql-input {
+            width: 100%%;
+            min-height: 140px;
+            box-sizing: border-box;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.9rem;
+            padding: 14px;
+            border: 1px solid var(--fossci-border, #e2e8f0);
+            border-radius: 10px;
+            background: var(--fossci-bg, #f8fafc);
+            color: var(--fossci-input-text, #1e293b);
+            margin-bottom: 12px;
+        }
+        .btn-primary {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border: none;
+            background: linear-gradient(135deg, var(--fossci-accent, #4f46e5), var(--fossci-accent-2, #6366f1));
+            color: #ffffff;
+        }
+        .fossci-sql-error {
+            margin-top: 20px;
+            padding: 14px 18px;
+            border-radius: 10px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+        .fossci-sql-count { color: var(--fossci-muted, #64748b); font-size: 0.85rem; margin-top: 8px; }
+        .fossci-table-wrapper { overflow-x: auto; margin-top: 20px; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 12px; background: var(--fossci-bg, #f8fafc); }
+        #sql-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 600px; }
+        #sql-table th, #sql-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--fossci-border, #e2e8f0); font-size: 0.85rem; }
+        #sql-table th { background: var(--fossci-bg-2, #f1f5f9); font-weight: 600; font-size: 0.75rem; color: var(--fossci-th-text, #475569); text-transform: uppercase; letter-spacing: 0.06em; }
+        #sql-table td { background: #ffffff; }
+        .fossci-empty { margin-top: 20px; padding: 24px; text-align: center; color: var(--fossci-muted, #64748b); background: var(--fossci-bg, #f8fafc); border: 1px dashed var(--fossci-border, #e2e8f0); border-radius: 12px; }
+    </style>
+    <div class="fossci-container">
+        <div class="fossci-header">
+            <h2>Ad-hoc SQL</h2>
+            <p>Read-only (SELECT only) queries against the entity store. Setup/Admin only.</p>
+        </div>
+        <form method="get" action="fossci/sql">
+            <textarea class="fossci-sql-input" name="q" placeholder="SELECT * FROM sample LIMIT 20;">%s</textarea>
+            <button class="btn-primary" type="submit">Run</button>
+        </form>
+        %s
+    </div>
+</div>
+""", escaped_sql, result_html)
+end
+
 return html
