@@ -85,4 +85,13 @@ function config.is_initialized(root)
     return paths.file_exists(config.db_path(root))
 end
 
+-- Layout-as-code: a single optional file, not a directory of many (a
+-- deployment has exactly one site layout, unlike schemas/extensions/views).
+function config.layout_path(root)
+    if root == nil then
+        root = config.find_checkout_root()
+    end
+    return paths.joinpath(root, "layout.lua")
+end
+
 return config

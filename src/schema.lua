@@ -213,10 +213,10 @@ function schema.layout(db_path, name)
         return result
     else
         dkjson = require("dkjson")
-        fields = schema.fields(db_path, name)
-        if #fields == 0 then
+        if schema.is_registered(db_path, name) == false then
             return nil, "unknown entity type: " .. name
         end
+        fields = schema.fields(db_path, name)
         result = {
             name = name,
             fields = {}
@@ -250,6 +250,19 @@ function schema.show_json(db_path, name)
     end
     dkjson = require("dkjson")
     return dkjson.encode(layout)
+end
+
+-- Whether `entity_type` has been registered at all. A registered type
+-- can legitimately have zero custom fields (e.g. a schema whose only
+-- data is its name plus the system-managed created/updated columns),
+-- so callers must not use "schema.fields() returned nothing" as a
+-- stand-in for "this type doesn't exist" -- that conflates the two.
+function schema.is_registered(db_path, entity_type)
+    rows = db.query(db_path, string.format(
+        "SELECT 1 FROM entity_type WHERE name = %s;",
+        db.quote(entity_type)
+    ))
+    return rows != nil and #rows > 0
 end
 
 -- The registered field list for an entity type, in declaration order --

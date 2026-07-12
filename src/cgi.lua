@@ -5,6 +5,7 @@ entity = require("entity")
 ledger = require("ledger")
 view = require("view")
 html = require("html")
+layout = require("layout")
 json = require("dkjson")
 paths = require("paths")
 
@@ -15,6 +16,12 @@ cgi = {}
 -- is the closest existing Fossil capability to "real contributor with
 -- write access"; Setup/Admin logins already carry it via fullcap().
 REQUIRED_CAPABILITY = "i"
+
+-- Rows per /browse page. A flat, fixed page size rather than a
+-- user-configurable one -- simple, and every entity type here is a
+-- plain projected SQL table so COUNT/LIMIT/OFFSET are cheap regardless
+-- of size.
+BROWSE_PAGE_SIZE = 100
 
 function cgi.has_capability(capabilities, letter)
     if capabilities == nil or capabilities == "" then
@@ -179,6 +186,17 @@ function cgi.handle_request()
     end
     schema.sync_all(db_path, root)
 
+    -- Layout-as-code: written into Fossil's own repo config table, not
+    -- fossci's store -- requires FOSSIL_REPOSITORY (only present when
+    -- Fossil invokes us as a real CGI extension, not bare CLI use).
+    repo_fossil = os.getenv("FOSSIL_REPOSITORY")
+    if repo_fossil != nil and repo_fossil != "" then
+        layout_def, layout_err = layout.load(root)
+        if layout_def != nil then
+            layout.sync(repo_fossil, layout_def, root)
+        end
+    end
+
     author = os.getenv("FOSSIL_USER")
     if author == nil or author == "" then
         author = default_value(os.getenv("USER"), "anonymous")
@@ -212,8 +230,20 @@ function cgi.handle_request()
             return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
         end
 
-        rows = entity.list(db_path, entity_type)
-        body = html.render_browse(entity_type, layout, rows)
+        page = tonumber(params.page)
+        if page == nil or page < 1 then
+            page = 1
+        end
+        total = entity.count(db_path, entity_type)
+        offset = (page - 1) * BROWSE_PAGE_SIZE
+        rows = entity.list(db_path, entity_type, BROWSE_PAGE_SIZE, offset)
+        body = html.render_browse(entity_type, layout, rows, page, BROWSE_PAGE_SIZE, total)
+        return print_response("200 OK", "text/html", body)
+    end
+
+    if path_info == "/" or path_info == "" then
+        entity_types = schema.list(db_path)
+        body = html.render_index(entity_types)
         return print_response("200 OK", "text/html", body)
     end
 

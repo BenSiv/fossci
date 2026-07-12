@@ -128,12 +128,12 @@ end
 function entity.validate(db_path, entity_type, values, old)
     is_update = (old != nil)
     issues = {}
-    fields = schema.fields(db_path, entity_type)
-    if #fields == 0 then
+    if schema.is_registered(db_path, entity_type) == false then
         table.insert(issues, {field = nil, severity = "error",
             message = "unknown entity type: " .. tostring(entity_type)})
         return issues
     end
+    fields = schema.fields(db_path, entity_type)
 
     for _, field in ipairs(fields) do
         value = values[field.name]
@@ -339,15 +339,36 @@ function entity.get(db_path, entity_type, entity_id)
     return rows[1]
 end
 
-function entity.list(db_path, entity_type)
+-- `limit`/`offset` are both optional; omit either (or both) for the
+-- full unpaginated result, kept for callers that already assume that
+-- (e.g. views/extensions built before pagination existed).
+function entity.list(db_path, entity_type, limit, offset)
     if db.table_exists(db_path, entity_type) == false then
         return {}
     end
-    rows = db.query(db_path, "SELECT * FROM " .. entity_type .. ";")
+    query = "SELECT * FROM " .. entity_type
+    if limit != nil then
+        query = query .. " LIMIT " .. tostring(tonumber(limit))
+        if offset != nil then
+            query = query .. " OFFSET " .. tostring(tonumber(offset))
+        end
+    end
+    rows = db.query(db_path, query .. ";")
     if rows == nil then
         return {}
     end
     return rows
+end
+
+function entity.count(db_path, entity_type)
+    if db.table_exists(db_path, entity_type) == false then
+        return 0
+    end
+    rows = db.query(db_path, "SELECT COUNT(*) AS n FROM " .. entity_type .. ";")
+    if rows == nil or rows[1] == nil then
+        return 0
+    end
+    return tonumber(rows[1].n)
 end
 
 -- Drains the after-hook job queue: runs each pending job (oldest first,

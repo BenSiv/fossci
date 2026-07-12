@@ -87,14 +87,34 @@ fossci itself, regardless of what Fossil's own page would have allowed.
 ## 4. Embed in a Fossil page
 
 Fossci renders its own pages; Fossil doesn't need to understand their
-content, only frame them. A Markdown-mimetype wiki page (Fossil allows raw
-HTML there) can embed a registration table with a plain iframe -- no
-inline `<script>`, so no CSP-nonce cooperation from Fossil is needed:
+content, only frame them.
+
+**Not inside wiki content.** An earlier version of this doc claimed a
+Markdown-mimetype wiki page could embed a registration table with a
+plain `<iframe>`. Verified false against a real Fossil build:
+`wikiformat.c`'s markup allowlist (`aMarkup[]`) has no entry for
+`<iframe>`/`<script>`/`<object>`/`<form>` under *any* wiki mimetype
+(`text/x-fossil-wiki`, `text/x-markdown`, or plain text all go through
+the same sanitizer) -- Fossil escapes it to an inert
+`<span class='error'>&lt;iframe ...&gt;</span>` instead of rendering it,
+regardless of mimetype. There is no supported way to get a truly live
+embed inside wiki page content. The closest available approximation is
+a plain link (`<a>` -- and Markdown's `[text](url)` -- are both
+allowed), which fossci's own entry-conversion tooling uses:
+
+```markdown
+[Open registration table →](/ext/fossci/register?type=reagent)
+```
+
+This opens fossci's page on click rather than embedding it inline.
+
+**Outside wiki content, a real iframe still works.** Any Fossil page
+that isn't run through the wiki sanitizer -- a raw file served from the
+repository tree via `/doc`, or a custom skin's header/footer template --
+can embed one normally, since sanitization is specific to wiki/ticket
+content, not universal:
 
 ```html
 <iframe src="/ext/fossci/register?type=reagent"
         style="width:100%;height:600px;border:0;"></iframe>
 ```
-
-Create or edit a wiki page with mimetype `text/x-markdown` and drop that
-tag in where the registration table should appear.

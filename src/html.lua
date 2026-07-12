@@ -220,7 +220,7 @@ function html.render(entity_type, layout_json, nonce)
         <div class="fossci-header">
             <h2>Register %s</h2>
             <p>Fill out the sheet. Fields marked with <span class="req-dot">*</span> are required.</p>
-            <p><a href="browse?type=%s">Browse existing %s entities &rarr;</a></p>
+            <p><a href="fossci/browse?type=%s">Browse existing %s entities &rarr;</a></p>
         </div>
 
         <div class="fossci-table-wrapper">
@@ -502,7 +502,7 @@ end
 -- each one's detail page. Pure server-rendered HTML -- no JS, so none
 -- of the CSP/nonce concerns the registration table's client-side JS
 -- has (see html.render's header comment for why that one needs one).
-function html.render_browse(entity_type, layout, rows)
+function html.render_browse(entity_type, layout, rows, page, page_size, total)
     escaped_type = html_escape(entity_type)
 
     header_cells = "<th>ID</th>"
@@ -512,7 +512,7 @@ function html.render_browse(entity_type, layout, rows)
 
     body_rows = ""
     for _, row in ipairs(rows) do
-        cells = "<td><a href=\"detail?type=" .. escaped_type .. "&id=" .. tostring(row.id) ..
+        cells = "<td><a href=\"fossci/detail?type=" .. escaped_type .. "&id=" .. tostring(row.id) ..
             "\">#" .. tostring(row.id) .. "</a></td>"
         for _, field in ipairs(layout.fields) do
             cells = cells .. "<td>" .. display_value(row[field.name]) .. "</td>"
@@ -524,6 +524,25 @@ function html.render_browse(entity_type, layout, rows)
         header_cells .. "</tr></thead><tbody>" .. body_rows .. "</tbody></table></div>"
     if #rows == 0 then
         table_or_empty = "<p class=\"fossci-empty\">No " .. escaped_type .. " entities registered yet.</p>"
+    end
+
+    pager = ""
+    if total > page_size then
+        last_page = math.ceil(total / page_size)
+        range_start = ((page - 1) * page_size) + 1
+        range_end = range_start + #rows - 1
+        pager = "<div class=\"fossci-pager\">"
+        pager = pager .. "<span>Showing " .. tostring(range_start) .. "-" .. tostring(range_end) ..
+            " of " .. tostring(total) .. "</span>"
+        pager = pager .. "<span class=\"fossci-pager-links\">"
+        if page > 1 then
+            pager = pager .. "<a href=\"fossci/browse?type=" .. escaped_type .. "&page=" .. tostring(page - 1) .. "\">&laquo; Prev</a>"
+        end
+        pager = pager .. "<span>Page " .. tostring(page) .. " of " .. tostring(last_page) .. "</span>"
+        if page < last_page then
+            pager = pager .. "<a href=\"fossci/browse?type=" .. escaped_type .. "&page=" .. tostring(page + 1) .. "\">Next &raquo;</a>"
+        end
+        pager = pager .. "</span></div>"
     end
 
     return string.format("""
@@ -599,6 +618,17 @@ function html.render_browse(entity_type, layout, rows)
             border: 1px dashed #e2e8f0;
             border-radius: 12px;
         }
+        .fossci-pager {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 16px;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+        .fossci-pager-links { display: flex; gap: 14px; align-items: center; }
+        .fossci-pager-links a { color: #4f46e5; text-decoration: none; font-weight: 600; }
+        .fossci-pager-links a:hover { text-decoration: underline; }
     </style>
 
     <div class="fossci-container">
@@ -607,12 +637,13 @@ function html.render_browse(entity_type, layout, rows)
                 <h2>Browse %s</h2>
                 <p>%d registered</p>
             </div>
-            <a class="btn btn-primary" href="register?type=%s">+ Register new</a>
+            <a class="btn btn-primary" href="fossci/register?type=%s">+ Register new</a>
         </div>
+        %s
         %s
     </div>
 </div>
-""", escaped_type, escaped_type, #rows, escaped_type, table_or_empty)
+""", escaped_type, escaped_type, total, escaped_type, table_or_empty, pager)
 end
 
 -- Detail view: current field values plus the full ledger history for
@@ -696,7 +727,7 @@ function html.render_detail(entity_type, layout, row, history)
     <div class="fossci-container">
         <div class="fossci-header">
             <h2>%s #%s</h2>
-            <a href="browse?type=%s">&larr; Back to browse</a>
+            <a href="fossci/browse?type=%s">&larr; Back to browse</a>
         </div>
 
         <div class="fossci-detail-fields">
@@ -797,6 +828,63 @@ function html.render_view(view_def, rows)
     </div>
 </div>
 """, escaped_title, escaped_title, #rows, table_or_empty)
+end
+
+-- fossci's own landing page: every registered entity type, linking to
+-- its browse view. This is the page a deployment's Fossil "mainmenu"
+-- entry (see doc/deployment.md) should point at, so there's a real
+-- entry point into fossci beyond knowing a /browse?type=... URL by hand.
+function html.render_index(entity_types)
+    items = ""
+    for _, row in ipairs(entity_types) do
+        escaped_name = html_escape(row.name)
+        items = items .. "<li><a href=\"fossci/browse?type=" .. escaped_name .. "\">" .. escaped_name .. "</a></li>"
+    end
+
+    list_or_empty = "<ul class=\"fossci-index-list\">" .. items .. "</ul>"
+    if #entity_types == 0 then
+        list_or_empty = "<p class=\"fossci-empty\">No entity types registered yet.</p>"
+    end
+
+    return string.format("""
+<div class="fossil-doc" data-title="fossci">
+    <style>
+        .fossci-container {
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #334155;
+            background: #ffffff;
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin: 20px auto;
+            max-width: 800px;
+            border: 1px solid #f1f5f9;
+        }
+        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
+        .fossci-header p { color: #64748b; margin: 0; font-size: 0.95rem; }
+        .fossci-index-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+        .fossci-index-list li { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; }
+        .fossci-index-list a { display: block; padding: 12px 16px; color: #4f46e5; text-decoration: none; font-weight: 600; text-transform: capitalize; }
+        .fossci-index-list a:hover { background: #f1f5f9; }
+        .fossci-empty {
+            padding: 32px;
+            text-align: center;
+            color: #64748b;
+            background: #f8fafc;
+            border: 1px dashed #e2e8f0;
+            border-radius: 12px;
+        }
+    </style>
+    <div class="fossci-container">
+        <div class="fossci-header">
+            <h2>Entity types</h2>
+            <p>%d registered</p>
+        </div>
+        %s
+    </div>
+</div>
+""", #entity_types, list_or_empty)
 end
 
 return html
