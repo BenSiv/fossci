@@ -38,11 +38,40 @@
       requires a live `fossil open`'d checkout, deliberately -- bare-
       repository (checkout-less) serving is out of scope by design
 
-## Later (M2 -- extensibility platform)
-- [ ] Extension manifest format + loader/registry
-- [ ] Admin-approval registry for declared capabilities
-- [ ] After-hooks: async event dispatch, per-extension retry/failure isolation
-- [ ] `ctx.create_entity` / `ctx.update_entity` write bindings, capability-gated
+## M2 -- extensibility platform
+- [x] Extension manifest format + loader/registry (`src/extension.lua`):
+      formalizes manifest loading/validation/matching, previously inline
+      in `entity.lua`'s before-hook dispatch; `fossci extension list/show`
+- [x] Admin-approval registry for declared capabilities: `extension_approval`
+      table records the capabilities approved at approval time; a manifest
+      edited to request more afterward is treated as unapproved again
+      (capability diff, not just presence) until re-approved (`fossci
+      extension approve/revoke`) -- closes a real gap where M1's
+      before-hooks ran any extension unconditionally, no approval gate
+- [x] After-hooks: async event dispatch, per-extension retry/failure
+      isolation. fossci is a one-shot CGI/CLI process (no long-lived
+      place to run a background timer), so "async" is a job queue
+      (`extension_job` table) drained by `fossci extension run-pending`,
+      meant to be invoked by whatever the deployer already uses for
+      scheduled tasks (cron, etc.) -- fossci doesn't prescribe one.
+      Verified: one job per matching approved extension, isolated
+      per-job retry (stays 'pending' and retries up to
+      `extension.MAX_JOB_ATTEMPTS`, then flips to 'failed'), and a
+      permanently-failing extension's job never affects another
+      extension's job for the same event
+- [x] `ctx.create_entity` / `ctx.update_entity` write bindings,
+      capability-gated on `capabilities.write` containing `"entity"`
+      (same blanket-capability shape as the existing `read` check, not
+      per-entity-type) -- available to both before- and after-hooks
+      (`build_ctx` in `entity.lua`)
+- [ ] Known gap found while verifying the above, not yet fixed: `net =
+      "outbound"` capability is non-functional -- `sandbox.lua` does
+      `require("socket")`, but no build (fossci's own `bld/build.sh` or
+      its sibling projects) actually compiles/links LuaSocket's native
+      core into the static binary; unlike the `lfs` packaging bug found
+      earlier, this is a much bigger fix (multiple C sources, possibly
+      LuaSec for HTTPS), not attempted yet. No extension has needed real
+      network access yet either, so this was never exercised until now.
 
 ## Later (M3 -- analytics path)
 - [ ] Postgres adapter for the projection tables (ledger semantics unchanged)

@@ -10,9 +10,8 @@
 db = require("db")
 ledger = require("ledger")
 schema = require("schema")
-paths = require("paths")
-lfs = require("lfs")
-sandbox = require("sandbox")
+config = require("config")
+extension = require("extension")
 json = require("dkjson")
 
 entity = {}
@@ -21,116 +20,103 @@ function is_number(v)
     return tonumber(v) != nil
 end
 
-function run_before_hooks(db_path, entity_type, new_values, old_values, is_update)
-    config = require("config")
-    ext_dir = config.extensions_dir()
-    attr = lfs.attributes(ext_dir)
-    issues = {}
-    if attr == nil or attr.mode != "directory" then
-        return issues
+function has_capability_item(list, item)
+    if list == nil then
+        return false
     end
+    for _, v in ipairs(list) do
+        if v == item then
+            return true
+        end
+    end
+    return false
+end
+
+-- ctx.query/create_entity/update_entity, capability-gated per manifest --
+-- shared between before-hooks (synchronous, entity.validate) and
+-- after-hooks (entity.run_pending_jobs). Lives here, not in
+-- extension.lua, because it needs entity.create/entity.update -- see
+-- extension.lua's header comment for why that module can't require this
+-- one back.
+function build_ctx(db_path, manifest)
+    capabilities = manifest.capabilities
+    ctx = {}
+
+    function ctx.query(target_type, filter)
+        can_read = false
+        if capabilities != nil then
+            can_read = has_capability_item(capabilities.read, "entity")
+        end
+        if can_read == false then
+            error("Extension '" .. tostring(manifest.name) .. "' does not have read.entity capability")
+        end
+        if db.table_exists(db_path, target_type) == false then
+            return {}
+        end
+        where = {}
+        for k, v in pairs(filter) do
+            table.insert(where, k .. " = " .. db.quote(tostring(v)))
+        end
+        q = "SELECT * FROM " .. target_type
+        if #where > 0 then
+            q = q .. " WHERE " .. table.concat(where, " AND ")
+        end
+        q = q .. ";"
+        rows = db.query(db_path, q)
+        if rows == nil then
+            return {}
+        end
+        return rows
+    end
+
+    function ctx.create_entity(target_type, values)
+        can_write = false
+        if capabilities != nil then
+            can_write = has_capability_item(capabilities.write, "entity")
+        end
+        if can_write == false then
+            error("Extension '" .. tostring(manifest.name) .. "' does not have write.entity capability")
+        end
+        return entity.create(db_path, target_type, values, "extension:" .. manifest.name)
+    end
+
+    function ctx.update_entity(target_type, target_id, values)
+        can_write = false
+        if capabilities != nil then
+            can_write = has_capability_item(capabilities.write, "entity")
+        end
+        if can_write == false then
+            error("Extension '" .. tostring(manifest.name) .. "' does not have write.entity capability")
+        end
+        return entity.update(db_path, target_type, target_id, values, "extension:" .. manifest.name)
+    end
+
+    return ctx
+end
+
+function run_before_hooks(db_path, entity_type, new_values, old_values, is_update)
+    ext_dir = config.extensions_dir()
+    issues = {}
 
     event_name = "entity.before_create"
     if is_update then
         event_name = "entity.before_update"
     end
 
-    for dir_name in lfs.dir(ext_dir) do
-        if dir_name != "." and dir_name != ".." then
-            manifest_path = paths.joinpath(ext_dir, dir_name, "manifest.lua")
-            main_path = paths.joinpath(ext_dir, dir_name, "main.lua")
-
-            if paths.file_exists(manifest_path) and paths.file_exists(main_path) then
-                manifest_file = io.open(manifest_path, "r")
-                if manifest_file != nil then
-                    manifest_src = io.read(manifest_file, "*all")
-                    io.close(manifest_file)
-
-                    ok, manifest = sandbox.run(manifest_src, manifest_path, sandbox.data_env())
-                    if ok and type(manifest) == "table" then
-                        matches_event = false
-                        if manifest.events != nil then
-                            for _, ev in ipairs(manifest.events) do
-                                if ev == event_name then
-                                    matches_event = true
-                                    break
-                                end
-                            end
-                        end
-
-                        matches_entity = false
-                        if manifest.entity_types != nil then
-                            for _, et in ipairs(manifest.entity_types) do
-                                if et == entity_type then
-                                    matches_entity = true
-                                    break
-                                end
-                            end
-                        end
-
-                        if matches_event and matches_entity then
-                            main_file = io.open(main_path, "r")
-                            if main_file != nil then
-                                main_src = io.read(main_file, "*all")
-                                io.close(main_file)
-
-                                env = sandbox.extension_env(manifest.capabilities)
-                                env.on_before = nil
-
-                                run_ok, err = sandbox.run(main_src, main_path, env)
-                                if run_ok then
-                                    if type(env.on_before) == "function" then
-                                        ctx = {}
-                                        function ctx.query(target_type, filter)
-                                            can_read = false
-                                            if manifest.capabilities != nil and manifest.capabilities.read != nil then
-                                                for _, cap in ipairs(manifest.capabilities.read) do
-                                                    if cap == "entity" then
-                                                        can_read = true
-                                                    end
-                                                end
-                                            end
-                                            if not can_read then
-                                                error("Extension does not have read.entity capability")
-                                            end
-
-                                            if not db.table_exists(db_path, target_type) then
-                                                return {}
-                                            end
-                                            where = {}
-                                            for k, v in pairs(filter) do
-                                                table.insert(where, k .. " = " .. db.quote(tostring(v)))
-                                            end
-                                            q = "SELECT * FROM " .. target_type
-                                            if #where > 0 then
-                                                q = q .. " WHERE " .. table.concat(where, " AND ")
-                                            end
-                                            q = q .. ";"
-                                            rows = db.query(db_path, q)
-                                            if rows == nil then
-                                                return {}
-                                            end
-                                            return rows
-                                        end
-
-                                        hook_ok, hook_issues = pcall(env.on_before, new_values, old_values, ctx)
-                                        if hook_ok and type(hook_issues) == "table" then
-                                            for _, issue in ipairs(hook_issues) do
-                                                table.insert(issues, issue)
-                                            end
-                                        elseif not hook_ok then
-                                            table.insert(issues, {field = nil, severity = "error",
-                                                message = "Hook execution error: " .. tostring(hook_issues)})
-                                        end
-                                    end
-                                else
-                                    table.insert(issues, {field = nil, severity = "error",
-                                        message = "Error running extension main.lua: " .. tostring(err)})
-                                end
-                            end
-                        end
+    for _, entry in ipairs(extension.matching(ext_dir, event_name, entity_type)) do
+        if extension.is_approved(db_path, entry.manifest) then
+            ctx = build_ctx(db_path, entry.manifest)
+            invoke_ok, result = extension.invoke(ext_dir, entry.name, entry.manifest, "on_before",
+                new_values, old_values, ctx)
+            if invoke_ok then
+                if type(result) == "table" then
+                    for _, issue in ipairs(result) do
+                        table.insert(issues, issue)
                     end
                 end
+            else
+                table.insert(issues, {field = nil, severity = "error",
+                    message = "Extension '" .. entry.name .. "' error: " .. tostring(result)})
             end
         end
     end
@@ -240,6 +226,9 @@ function entity.create(db_path, entity_type, values, author, source)
         entity_type, table.concat(columns, ", "), table.concat(literals, ", ")
     ))
 
+    extension.enqueue_after_hooks(db_path, config.extensions_dir(),
+        "entity.after_create", entity_type, entity_id, values, nil)
+
     return entity_id, issues
 end
 
@@ -285,6 +274,9 @@ function entity.update(db_path, entity_type, entity_id, values, author, source)
     db.exec(db_path, string.format(
         "UPDATE %s SET %s WHERE id = %d;", entity_type, table.concat(assignments, ", "), entity_id
     ))
+
+    extension.enqueue_after_hooks(db_path, config.extensions_dir(),
+        "entity.after_update", entity_type, entity_id, merged, current)
 
     return entity_id, issues
 end
@@ -347,6 +339,51 @@ function entity.list(db_path, entity_type)
         return {}
     end
     return rows
+end
+
+-- Drains the after-hook job queue: runs each pending job (oldest first,
+-- up to `limit`), marking it done or failed. A job that errors stays
+-- 'pending' (and gets retried on the next run) until it has failed
+-- extension.MAX_JOB_ATTEMPTS times; one job's failure never affects any
+-- other job. Intended to be invoked periodically by whatever the
+-- deployer already uses for scheduled tasks (cron, etc.) -- fossci is a
+-- one-shot CGI/CLI process, so there's no long-lived place inside it to
+-- run this on a timer itself.
+function entity.run_pending_jobs(db_path, limit)
+    ext_dir = config.extensions_dir()
+    ran = 0
+    failed = 0
+    for _, job in ipairs(extension.pending_jobs(db_path, limit)) do
+        manifest, err = extension.load_manifest(ext_dir, job.extension_name)
+        if manifest == nil then
+            extension.mark_job_failed(db_path, job, "manifest error: " .. tostring(err))
+            failed = failed + 1
+        elseif extension.is_approved(db_path, manifest) == false then
+            extension.mark_job_failed(db_path, job,
+                "extension not approved (or capabilities changed since approval)")
+            failed = failed + 1
+        else
+            new_values = nil
+            if job.new_values_json != nil then
+                new_values = json.decode(job.new_values_json)
+            end
+            old_values = nil
+            if job.old_values_json != nil then
+                old_values = json.decode(job.old_values_json)
+            end
+            ctx = build_ctx(db_path, manifest)
+            invoke_ok, result = extension.invoke(ext_dir, job.extension_name, manifest, "on_after",
+                new_values, old_values, ctx)
+            if invoke_ok then
+                extension.mark_job_done(db_path, job)
+                ran = ran + 1
+            else
+                extension.mark_job_failed(db_path, job, tostring(result))
+                failed = failed + 1
+            end
+        end
+    end
+    return {ran = ran, failed = failed}
 end
 
 function print_issues(issues)
@@ -469,6 +506,105 @@ function entity.do_entity(cmd_args, db_path)
     end
 
     print("Usage: fossci entity <create|list|show|validate-json|create-json> [args]")
+end
+
+-- CLI entry point: `fossci extension <list|show|approve|revoke|run-pending> [args]`
+-- Lives here rather than in extension.lua for the same reason build_ctx
+-- does: run-pending needs entity.create/entity.update, and extension.lua
+-- can't require this module back without a require cycle.
+function entity.do_extension(cmd_args, db_path)
+    action = cmd_args[1]
+    ext_dir = config.extensions_dir()
+
+    if action == "list" then
+        for _, entry in ipairs(extension.all(ext_dir)) do
+            if entry.manifest == nil then
+                print(string.format("%-20s ERROR: %s", entry.name, entry.err))
+            else
+                status = "not approved"
+                if extension.is_approved(db_path, entry.manifest) then
+                    status = "approved"
+                end
+                print(string.format("%-20s %-14s events=%-30s entity_types=%s",
+                    entry.name, status,
+                    table.concat(entry.manifest.events, ","),
+                    table.concat(entry.manifest.entity_types, ",")))
+            end
+        end
+        return
+    end
+
+    if action == "show" then
+        name = cmd_args[2]
+        if name == nil then
+            print("Usage: fossci extension show <name>")
+            return
+        end
+        manifest, err = extension.load_manifest(ext_dir, name)
+        if manifest == nil then
+            print("Error: " .. tostring(err))
+            return
+        end
+        caps = manifest.capabilities
+        if caps == nil then caps = {} end
+        read_list = caps.read
+        if read_list == nil then read_list = {} end
+        write_list = caps.write
+        if write_list == nil then write_list = {} end
+        net = caps.net
+        if net == nil then net = "none" end
+
+        print("name:         " .. manifest.name)
+        print("events:       " .. table.concat(manifest.events, ", "))
+        print("entity_types: " .. table.concat(manifest.entity_types, ", "))
+        print("capabilities: read=" .. table.concat(read_list, ",") ..
+              " write=" .. table.concat(write_list, ",") .. " net=" .. net)
+        if extension.is_approved(db_path, manifest) then
+            print("status:       approved")
+        elseif extension.approved_capabilities(db_path, name) == nil then
+            print("status:       not approved")
+        else
+            print("status:       NOT APPROVED -- capabilities changed since last approval, re-approval required")
+        end
+        return
+    end
+
+    if action == "approve" then
+        name = cmd_args[2]
+        if name == nil then
+            print("Usage: fossci extension approve <name>")
+            return
+        end
+        manifest, err = extension.load_manifest(ext_dir, name)
+        if manifest == nil then
+            print("Error: " .. tostring(err))
+            return
+        end
+        extension.approve(db_path, manifest, os.getenv("USER"))
+        caps = manifest.capabilities
+        if caps == nil then caps = {} end
+        print("Approved '" .. name .. "' with capabilities: " .. json.encode(caps))
+        return
+    end
+
+    if action == "revoke" then
+        name = cmd_args[2]
+        if name == nil then
+            print("Usage: fossci extension revoke <name>")
+            return
+        end
+        extension.revoke(db_path, name)
+        print("Revoked '" .. name .. "'")
+        return
+    end
+
+    if action == "run-pending" then
+        result = entity.run_pending_jobs(db_path)
+        print(string.format("Ran %d, failed %d", result.ran, result.failed))
+        return
+    end
+
+    print("Usage: fossci extension <list|show|approve|revoke|run-pending> [args]")
 end
 
 return entity

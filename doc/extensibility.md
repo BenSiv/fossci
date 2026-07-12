@@ -35,10 +35,12 @@ return {
 
 ```lua
 -- extensions/unique-lot-number/main.lua
+-- Luam scopes a bare assignment to its enclosing block (not the whole
+-- chunk, as stock Lua's globals would be) -- there is no `local` keyword.
 function on_before(new, old, ctx)
-  local issues = {}
+  issues = {}
   if old == nil or new.lot_number != old.lot_number then
-    local dup = ctx.query("reagent", {lot_number = new.lot_number})
+    dup = ctx.query("reagent", {lot_number = new.lot_number})
     if #dup > 0 then
       table.insert(issues, {field = "lot_number", severity = "error",
         message = "Lot number already registered"})

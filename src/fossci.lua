@@ -15,6 +15,7 @@ do_schema = schema.do_schema
 
 entity = require("entity")
 do_entity = entity.do_entity
+do_extension = entity.do_extension
 
 ledger = require("ledger")
 do_ledger = ledger.do_ledger
@@ -42,6 +43,7 @@ function main()
         ["schema"] = do_schema,
         ["entity"] = do_entity,
         ["ledger"] = do_ledger,
+        ["extension"] = do_extension,
     }
 
     arg[-1] = "lua"

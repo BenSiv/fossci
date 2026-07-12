@@ -7,6 +7,7 @@
 paths = require("paths")
 config = require("config")
 ledger = require("ledger")
+extension = require("extension")
 
 init = {}
 
@@ -25,6 +26,7 @@ function init.do_init(cmd_args, root)
 
     db_path = config.db_path(root)
     ledger.init_schema(db_path)
+    extension.init_schema(db_path)
 
     print("Initialized fossci store at " .. config.store_dir(root))
 end
