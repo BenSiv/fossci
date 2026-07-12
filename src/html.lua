@@ -750,12 +750,18 @@ end
 -- Unlike browse/detail, columns come from the view's own declared
 -- `columns` list (name/label), not a schema -- a view can join/select
 -- across entity types, so there's no single schema to draw from.
-function html.render_view(view_def, rows)
+function html.render_view(view_def, rows, param_value)
     title = view_def.title
     if title == nil then
         title = view_def.name
     end
     escaped_title = html_escape(title)
+
+    subtitle = tostring(#rows) .. " rows"
+    if view_def.param != nil then
+        subtitle = subtitle .. " -- filtered by " .. html_escape(view_def.param.name) ..
+            " = " .. html_escape(tostring(param_value))
+    end
 
     header_cells = ""
     for _, col in ipairs(view_def.columns) do
@@ -822,12 +828,12 @@ function html.render_view(view_def, rows)
     <div class="fossci-container">
         <div class="fossci-header">
             <h2>%s</h2>
-            <p>%d rows</p>
+            <p>%s</p>
         </div>
         %s
     </div>
 </div>
-""", escaped_title, escaped_title, #rows, table_or_empty)
+""", escaped_title, escaped_title, subtitle, table_or_empty)
 end
 
 -- fossci's own landing page: every registered entity type, linking to

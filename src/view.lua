@@ -91,6 +91,23 @@ function view.is_select_only(sql_text)
     return true
 end
 
+-- A view may declare at most one runtime parameter (e.g. scoping a
+-- lookup to one experiment's samples), bound through sqlite's own
+-- prepared-statement API (view.run below) -- never string-interpolated
+-- into the SQL text, so there's no injection surface from the value
+-- itself regardless of type. `type` controls the coercion applied
+-- before binding, not any kind of SQL-text validation.
+PARAM_TYPES = {"integer", "number", "text"}
+
+function is_valid_param_type(t)
+    for _, valid in ipairs(PARAM_TYPES) do
+        if t == valid then
+            return true
+        end
+    end
+    return false
+end
+
 function view.validate(def)
     if type(def.name) != "string" or def.name == "" then
         return "view must have a non-empty string 'name'"
@@ -107,6 +124,22 @@ function view.validate(def)
     for i, col in ipairs(def.columns) do
         if type(col.name) != "string" or col.name == "" then
             return string.format("view '%s' column #%d: missing 'name'", def.name, i)
+        end
+    end
+    if def.param != nil then
+        if type(def.param.name) != "string" or def.param.name == "" then
+            return "view '" .. tostring(def.name) .. "': param must have a non-empty string 'name'"
+        end
+        -- "id" and "name" are confirmed to collide with Fossil's own
+        -- /ext dispatch parameters (see doc/deployment.md) -- a query
+        -- param with either of these names never reaches fossci at
+        -- all, so reject them here rather than let an author discover
+        -- it as a mysterious 404 later.
+        if def.param.name == "id" or def.param.name == "name" then
+            return "view '" .. tostring(def.name) .. "': param name can't be 'id' or 'name' -- both collide with Fossil's own /ext dispatch (see doc/deployment.md)"
+        end
+        if is_valid_param_type(def.param.type) == false then
+            return "view '" .. tostring(def.name) .. "': param 'type' must be one of integer/number/text"
         end
     end
     return nil
@@ -168,16 +201,74 @@ function view.revoke(db_path, name)
     db.exec(db_path, "DELETE FROM view_approval WHERE name = " .. db.quote(name) .. ";")
 end
 
--- Runs an approved view's query. Returns (rows, err) -- rows is
--- whatever db.query returns (a list of {column_name = value} tables).
-function view.run(db_path, def)
+-- Runs an approved view's query. `param_value` is required iff the
+-- view declares `param` (ignored otherwise). Returns (rows, err) --
+-- rows is a list of {column_name = value} tables either way.
+function view.run(db_path, def, param_value)
     if view.is_select_only(def.sql) == false then
         return nil, "refusing to run: not a plain SELECT"
     end
-    rows = db.query(db_path, def.sql)
-    if rows == nil then
-        return {}
+
+    if def.param == nil then
+        rows = db.query(db_path, def.sql)
+        if rows == nil then
+            return {}
+        end
+        return rows
     end
+
+    return run_parameterized(db_path, def, param_value)
+end
+
+-- Real bind-parameter execution -- never string-interpolated into the
+-- SQL text, unlike everything else in this file (db.exec/db.query's
+-- own %s substitution is fine for identifiers/literals fossci itself
+-- builds, but a runtime-supplied filter value needs the real thing).
+-- sqlite3 isn't shared as a global across modules in Luam (each
+-- require() gets its own reference; see src/db.lua for the same
+-- require), so it's pulled in locally here rather than assumed
+-- available.
+function run_parameterized(db_path, def, param_value)
+    bind_value = param_value
+    if def.param.type == "integer" or def.param.type == "number" then
+        bind_value = tonumber(param_value)
+        if bind_value == nil then
+            return nil, "parameter '" .. def.param.name .. "' must be a number"
+        end
+    elseif param_value == nil or param_value == "" then
+        return nil, "missing required parameter '" .. def.param.name .. "'"
+    end
+
+    sqlite3 = require("sqlite3")
+    conn = sqlite3.open(db_path)
+    if conn == nil then
+        return nil, "cannot open database"
+    end
+
+    vm, err = sqlite3.prepare(conn, def.sql)
+    if vm == nil then
+        sqlite3.close(conn)
+        return nil, "invalid sql: " .. tostring(err)
+    end
+    if sqlite3.stmt.bind_parameter_count(vm) != 1 then
+        sqlite3.stmt.finalize(vm)
+        sqlite3.close(conn)
+        return nil, "view declares a param but sql doesn't have exactly one '?' placeholder"
+    end
+
+    bind_rc = sqlite3.stmt.bind(vm, 1, bind_value)
+    if bind_rc != 0 then
+        sqlite3.stmt.finalize(vm)
+        sqlite3.close(conn)
+        return nil, "failed to bind parameter"
+    end
+
+    rows = {}
+    for row in sqlite3.stmt.nrows(vm) do
+        table.insert(rows, row)
+    end
+    sqlite3.stmt.finalize(vm)
+    sqlite3.close(conn)
     return rows
 end
 

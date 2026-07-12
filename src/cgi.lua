@@ -298,11 +298,16 @@ function cgi.handle_request()
             return print_response("403 Forbidden", "text/html", "<div class='fossil-doc'><h3>Error: view '" .. html_escape(view_name) .. "' is not approved</h3></div>")
         end
 
-        rows, err = view.run(db_path, view_def)
+        param_value = nil
+        if view_def.param != nil then
+            param_value = params[view_def.param.name]
+        end
+
+        rows, err = view.run(db_path, view_def, param_value)
         if rows == nil then
             return print_response("500 Internal Server Error", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
         end
-        body = html.render_view(view_def, rows)
+        body = html.render_view(view_def, rows, param_value)
         return print_response("200 OK", "text/html", body)
     end
 
