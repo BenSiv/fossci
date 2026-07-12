@@ -46,6 +46,18 @@ function parse_query(query_str)
     return params
 end
 
+-- The `entry` query param is the embedding notebook entry's identifier
+-- (a wiki page name/URL, whatever the client sent) -- see doc/architecture.md
+-- and ledger.lua's source_notebook_entry_id. Optional: absent when
+-- fossci is used standalone, not embedded in a notebook entry.
+function source_from_params(params)
+    source = {}
+    if params.entry != nil and params.entry != "" then
+        source.notebook_entry_id = params.entry
+    end
+    return source
+end
+
 function print_response(status, content_type, body)
     io.write("Status: " .. status .. "\r\n")
     io.write("Content-Type: " .. content_type .. "\r\n")
@@ -223,7 +235,7 @@ function cgi.handle_request()
             return print_response("400 Bad Request", "application/json", json.encode({error = "Invalid JSON: " .. tostring(err)}))
         end
 
-        created_ids, batch_issues = entity.create_batch(db_path, entity_type, rows_values, author)
+        created_ids, batch_issues = entity.create_batch(db_path, entity_type, rows_values, author, source_from_params(params))
         response = {
             issues = batch_issues
         }
@@ -248,7 +260,7 @@ function cgi.handle_request()
             return print_response("400 Bad Request", "application/json", json.encode({error = "Invalid JSON: " .. tostring(err)}))
         end
 
-        updated_id, issues = entity.update(db_path, entity_type, entity_id, values, author)
+        updated_id, issues = entity.update(db_path, entity_type, entity_id, values, author, source_from_params(params))
         response = {
             issues = issues
         }

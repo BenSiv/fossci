@@ -250,6 +250,19 @@ function html.render(entity_type, layout_json, nonce)
         const baseUrl = window.location.pathname.replace(/\/register\/?$/, "");
         let rowCounter = 0;
 
+        // Which notebook entry (wiki page) this registration table is
+        // embedded in, for ledger provenance (source_notebook_entry_id).
+        // An explicit ?entry= on this iframe's own src overrides
+        // auto-detection via document.referrer (the parent page's URL,
+        // set by the browser for a same-origin iframe navigation) --
+        // useful when referrer policies strip it, or to label it by
+        // something other than a raw URL.
+        const urlParams = new URLSearchParams(window.location.search);
+        let notebookEntry = urlParams.get("entry");
+        if (!notebookEntry && document.referrer) {
+            notebookEntry = document.referrer;
+        }
+
         function initTable() {
             const headerRow = document.getElementById("table-headers");
             headerRow.innerHTML = "";
@@ -439,7 +452,8 @@ function html.render(entity_type, layout_json, nonce)
             msg.innerText = "Validating and submitting...";
             msg.style.display = "block";
 
-            fetch(`${baseUrl}/api/submit?type=${entityType}`, {
+            const entryParam = notebookEntry ? `&entry=${encodeURIComponent(notebookEntry)}` : "";
+            fetch(`${baseUrl}/api/submit?type=${entityType}${entryParam}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)

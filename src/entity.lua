@@ -298,16 +298,25 @@ function entity.validate_batch(db_path, entity_type, rows_values)
     return batch_issues
 end
 
--- Creates a batch of entities atomically.
+-- Creates a batch of entities atomically. `source.notebook_entry_id`
+-- (if given) is shared by every row in the batch -- one embedded
+-- registration table submission is one notebook-entry context -- but
+-- each row gets its own source_row_id (its position in the batch), so
+-- the ledger can tell which specific row of a multi-row submission
+-- produced which entity.
 function entity.create_batch(db_path, entity_type, rows_values, author, source)
     batch_issues = entity.validate_batch(db_path, entity_type, rows_values)
     if has_error(batch_issues) then
         return nil, batch_issues
     end
+    if source == nil then
+        source = {}
+    end
 
     created_ids = {}
     for i, values in ipairs(rows_values) do
-        id, issues = entity.create(db_path, entity_type, values, author, source)
+        row_source = {notebook_entry_id = source.notebook_entry_id, row_id = tostring(i)}
+        id, issues = entity.create(db_path, entity_type, values, author, row_source)
         if id != nil then
             table.insert(created_ids, id)
         else
