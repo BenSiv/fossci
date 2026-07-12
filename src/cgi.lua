@@ -2,6 +2,7 @@ db = require("db")
 config = require("config")
 schema = require("schema")
 entity = require("entity")
+ledger = require("ledger")
 html = require("html")
 json = require("dkjson")
 paths = require("paths")
@@ -131,7 +132,6 @@ function cgi.handle_request()
         paths.create_dir_if_not_exists(config.store_dir(root))
         paths.create_dir_if_not_exists(config.schemas_dir(root))
         paths.create_dir_if_not_exists(config.extensions_dir(root))
-        ledger = require("ledger")
         ledger.init_schema(db_path)
     end
     schema.sync_all(db_path, root)
@@ -153,6 +153,44 @@ function cgi.handle_request()
         end
 
         body = html.render(entity_type, layout_json, default_value(os.getenv("FOSSIL_NONCE"), ""))
+        return print_response("200 OK", "text/html", body)
+    end
+
+    if path_info == "/browse" then
+        entity_type = params.type
+        if entity_type == nil or entity_type == "" then
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' parameter</h3></div>")
+        end
+
+        layout, err = schema.layout(db_path, entity_type)
+        if layout == nil then
+            return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
+        end
+
+        rows = entity.list(db_path, entity_type)
+        body = html.render_browse(entity_type, layout, rows)
+        return print_response("200 OK", "text/html", body)
+    end
+
+    if path_info == "/detail" then
+        entity_type = params.type
+        entity_id = tonumber(params.id)
+        if entity_type == nil or entity_type == "" or entity_id == nil then
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' or 'id' parameter</h3></div>")
+        end
+
+        layout, err = schema.layout(db_path, entity_type)
+        if layout == nil then
+            return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: " .. tostring(err) .. "</h3></div>")
+        end
+
+        row = entity.get(db_path, entity_type, entity_id)
+        if row == nil then
+            return print_response("404 Not Found", "text/html", "<div class='fossil-doc'><h3>Error: no such " .. html_escape(entity_type) .. " #" .. tostring(entity_id) .. "</h3></div>")
+        end
+
+        history = ledger.history(db_path, entity_id)
+        body = html.render_detail(entity_type, layout, row, history)
         return print_response("200 OK", "text/html", body)
     end
 

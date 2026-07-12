@@ -167,10 +167,16 @@ function schema.sync_all(db_path, root)
     return true
 end
 
--- Renders the schema structure as a JSON string.
--- Will attempt to load labels directly from the version-controlled schema file
--- if available, falling back to database description.
-function schema.show_json(db_path, name)
+-- The schema layout as a plain Luam table: {name, fields = {{name, label,
+-- type, required, values?, ref_entity_type?}, ...}}. Shared by
+-- schema.show_json (JSON for the client-side registration table) and
+-- the browse/detail HTML views (cgi.lua/html.lua) -- one source of
+-- truth for "what does this entity type's layout look like", native
+-- consumers don't need to decode JSON just to get a Luam table back.
+-- Prefers labels from the version-controlled schema file if available,
+-- falling back to the database description (e.g. for a schema whose
+-- file was since removed but whose table/data still exists).
+function schema.layout(db_path, name)
     config = require("config")
     schemas_dir = config.schemas_dir()
     path = paths.joinpath(schemas_dir, name .. ".lua")
@@ -179,7 +185,6 @@ function schema.show_json(db_path, name)
         def = schema.load_file(path)
     end
 
-    dkjson = require("dkjson")
     if def != nil then
         result = {
             name = def.name,
@@ -205,8 +210,9 @@ function schema.show_json(db_path, name)
             end
             table.insert(result.fields, field_def)
         end
-        return dkjson.encode(result)
+        return result
     else
+        dkjson = require("dkjson")
         fields = schema.fields(db_path, name)
         if #fields == 0 then
             return nil, "unknown entity type: " .. name
@@ -232,8 +238,18 @@ function schema.show_json(db_path, name)
             end
             table.insert(result.fields, field_def)
         end
-        return dkjson.encode(result)
+        return result
     end
+end
+
+-- Renders the schema structure as a JSON string (see schema.layout).
+function schema.show_json(db_path, name)
+    layout, err = schema.layout(db_path, name)
+    if layout == nil then
+        return nil, err
+    end
+    dkjson = require("dkjson")
+    return dkjson.encode(layout)
 end
 
 -- The registered field list for an entity type, in declaration order --
