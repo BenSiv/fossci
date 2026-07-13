@@ -856,14 +856,15 @@ function html.render_index(entity_types, show_sql_widget)
     -- here (this page isn't wiki content, so none of Fossil's wiki
     -- sanitizer restrictions on <iframe> apply), unlike the entry
     -- notebook pages, which had to fall back to plain links instead.
+    -- No title/description here -- the embedded /sql page (title
+    -- "Query" as of this rewrite) already renders its own, and
+    -- html.in-iframe's CSS only flattens the *card* styling
+    -- (padding/border/shadow), not the heading text, so showing both
+    -- was a literal duplicate header, not just visual clutter.
     sql_widget = ""
     if show_sql_widget == true then
         sql_widget = """
     <div class="fossci-container">
-        <div class="fossci-header">
-            <h2>Ad-hoc SQL</h2>
-            <p>Read-only queries against the entity store. Setup/Admin only.</p>
-        </div>
         <iframe src="fossci/sql" style="width:100%;height:520px;border:0;border-radius:12px;"></iframe>
     </div>
 """
@@ -1090,7 +1091,7 @@ function html.render_sql(sql_text, column_names, rows, err)
     end
 
     return string.format("""
-<div class="fossil-doc" data-title="Ad-hoc SQL">
+<div class="fossil-doc" data-title="Query">
     <style>
         .fossci-container {
             font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -1147,7 +1148,7 @@ function html.render_sql(sql_text, column_names, rows, err)
     </style>
     <div class="fossci-container">
         <div class="fossci-header">
-            <h2>Ad-hoc SQL</h2>
+            <h2>Query</h2>
             <p>Read-only (SELECT only) queries against the entity store. Setup/Admin only.</p>
         </div>
         <form method="get" action="fossci/sql">
