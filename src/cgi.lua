@@ -245,7 +245,9 @@ function cgi.handle_request()
 
     if path_info == "/" or path_info == "" then
         entity_types = schema.list(db_path)
-        body = html.render_index(entity_types)
+        index_capabilities = os.getenv("FOSSIL_CAPABILITIES")
+        show_sql_widget = cgi.has_capability(index_capabilities, "s") or cgi.has_capability(index_capabilities, "a")
+        body = html.render_index(entity_types, show_sql_widget)
         return print_response("200 OK", "text/html", body)
     end
 

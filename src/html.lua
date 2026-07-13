@@ -840,7 +840,7 @@ end
 -- its browse view. This is the page a deployment's Fossil "mainmenu"
 -- entry (see doc/deployment.md) should point at, so there's a real
 -- entry point into fossci beyond knowing a /browse?type=... URL by hand.
-function html.render_index(entity_types)
+function html.render_index(entity_types, show_sql_widget)
     items = ""
     for _, row in ipairs(entity_types) do
         escaped_name = html_escape(row.name)
@@ -850,6 +850,23 @@ function html.render_index(entity_types)
     list_or_empty = "<ul class=\"fossci-index-list\">" .. items .. "</ul>"
     if #entity_types == 0 then
         list_or_empty = "<p class=\"fossci-empty\">No entity types registered yet.</p>"
+    end
+
+    -- Setup/Admin only, matching /sql's own gate -- an iframe is legal
+    -- here (this page isn't wiki content, so none of Fossil's wiki
+    -- sanitizer restrictions on <iframe> apply), unlike the entry
+    -- notebook pages, which had to fall back to plain links instead.
+    sql_widget = ""
+    if show_sql_widget == true then
+        sql_widget = """
+    <div class="fossci-container">
+        <div class="fossci-header">
+            <h2>Ad-hoc SQL</h2>
+            <p>Read-only queries against the entity store. Setup/Admin only.</p>
+        </div>
+        <iframe src="fossci/sql" style="width:100%;height:520px;border:0;border-radius:12px;"></iframe>
+    </div>
+"""
     end
 
     return string.format("""
@@ -869,8 +886,9 @@ function html.render_index(entity_types)
         .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
-        .fossci-index-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-        .fossci-index-list li { background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; }
+        .fossci-index-list { list-style: none !important; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+        .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; }
+        .fossci-index-list li::marker { content: ""; }
         .fossci-index-list a { display: block; padding: 12px 16px; color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; text-transform: capitalize; }
         .fossci-index-list a:hover { background: var(--fossci-bg-2, #f1f5f9); }
         .fossci-empty {
@@ -889,8 +907,9 @@ function html.render_index(entity_types)
         </div>
         %s
     </div>
+%s
 </div>
-""", #entity_types, list_or_empty)
+""", #entity_types, list_or_empty, sql_widget)
 end
 
 -- Every entry template found (whether it loaded cleanly or not), each
@@ -940,8 +959,9 @@ function html.render_templates_list(entries)
         .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
-        .fossci-index-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-        .fossci-index-list li { background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; padding: 14px 16px; }
+        .fossci-index-list { list-style: none !important; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+        .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; padding: 14px 16px; }
+        .fossci-index-list li::marker { content: ""; }
         .fossci-index-list a { font-weight: 700; color: var(--fossci-accent, #4f46e5); text-decoration: none; }
         .fossci-index-list a:hover { text-decoration: underline; }
         .fossci-index-list p { margin: 6px 0 0 0; color: var(--fossci-muted, #64748b); font-size: 0.88rem; }
