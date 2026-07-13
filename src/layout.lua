@@ -18,18 +18,20 @@
 --       extra_css = "nav.mainmenu { ... }",
 --       custom_js_path = "assets/wikiedit-wysiwyg.js",
 --       footer_extra = "<script src=\"/script.js\"></script>",
+--       header_extra = "<script nonce=\"$nonce\">...</script>",
 --   }
 --
--- `extra_css`/`footer_extra` are appended to whatever Fossil's own
--- "css"/"footer" config values already contain (idempotently, each
--- marked by its own fixed comment pair), not a replacement -- both are
--- normally Fossil's *entire* value for that setting, and fossci has no
--- reliable way to read the compiled-in default from Luam. A deployment
--- that wants either to take visible effect must have already seeded a
--- real base value once (e.g. via Fossil's own /setup_skinedit, or by
--- copying the matching pub/skins/default/{css,footer}.txt content into
--- that setting) -- a one-time, Fossil-side admin action, same category
--- as setting --extroot itself.
+-- `extra_css`/`footer_extra`/`header_extra` are appended to whatever
+-- Fossil's own "css"/"footer"/"header" config values already contain
+-- (idempotently, each marked by its own fixed comment pair), not a
+-- replacement -- all three are normally Fossil's *entire* value for
+-- that setting, and fossci has no reliable way to read the compiled-in
+-- default from Luam. A deployment that wants any of them to take
+-- visible effect must have already seeded a real base value once (e.g.
+-- via Fossil's own /setup_skinedit, or by copying the matching
+-- pub/skins/default/{css,footer,header}.txt content into that setting)
+-- -- a one-time, Fossil-side admin action, same category as setting
+-- --extroot itself.
 --
 -- `custom_js_path` reads a JS file from the checkout and merges it into
 -- Fossil's own "js" setting, served at /script.js -- nothing on any
@@ -49,6 +51,8 @@ JS_MARKER_START = "/* fossci-layout:custom_js:start */"
 JS_MARKER_END = "/* fossci-layout:custom_js:end */"
 FOOTER_MARKER_START = "<!-- fossci-layout:footer_extra:start -->"
 FOOTER_MARKER_END = "<!-- fossci-layout:footer_extra:end -->"
+HEADER_MARKER_START = "<!-- fossci-layout:header_extra:start -->"
+HEADER_MARKER_END = "<!-- fossci-layout:header_extra:end -->"
 
 function layout.load(root)
     path = config_layout_path(root)
@@ -246,6 +250,9 @@ function layout.sync(repo_fossil, def, root)
     end
     if def.footer_extra != nil then
         merge_config_text(repo_fossil, "footer", def.footer_extra, FOOTER_MARKER_START, FOOTER_MARKER_END)
+    end
+    if def.header_extra != nil then
+        merge_config_text(repo_fossil, "header", def.header_extra, HEADER_MARKER_START, HEADER_MARKER_END)
     end
 end
 
