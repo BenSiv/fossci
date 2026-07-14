@@ -23,6 +23,9 @@ do_ledger = ledger.do_ledger
 view = require("view")
 do_view = view.do_view
 
+users = require("users")
+do_users = users.do_users
+
 cgi = require("cgi")
 
 function main()
@@ -48,6 +51,7 @@ function main()
         ["ledger"] = do_ledger,
         ["extension"] = do_extension,
         ["view"] = do_view,
+        ["users"] = do_users,
     }
 
     arg[-1] = "lua"

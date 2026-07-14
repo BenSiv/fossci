@@ -101,4 +101,14 @@ function config.layout_path(root)
     return paths.joinpath(root, "layout.lua")
 end
 
+-- Users-as-code: same one-file-per-deployment shape as layout.lua (a
+-- deployment has one small list of additional accounts, not one file
+-- per user).
+function config.users_path(root)
+    if root == nil then
+        root = config.find_checkout_root()
+    end
+    return paths.joinpath(root, "users.lua")
+end
+
 return config
