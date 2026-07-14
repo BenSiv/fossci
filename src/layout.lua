@@ -19,7 +19,16 @@
 --       custom_js_path = "assets/wikiedit-wysiwyg.js",
 --       footer_extra = "<script src=\"/script.js\"></script>",
 --       header_extra = "<script nonce=\"$nonce\">...</script>",
+--       search_wiki = true,
+--       search_tkt = true,
 --   }
+--
+-- `search_wiki`/`search_tkt` map directly to Fossil's own "search-wiki"/
+-- "search-tkt" settings (src/search.c) -- both false by default in a
+-- fresh repo, so a header_extra/nav "Search" link is otherwise a dead
+-- end ("Search is disabled"). Declared here rather than fixed with a
+-- one-off `fossil set`, for the same reason project_name/nav/etc. are:
+-- surviving a fresh re-init without a manual step being silently missed.
 --
 -- `extra_css`/`footer_extra`/`header_extra` are appended to whatever
 -- Fossil's own "css"/"footer"/"header" config values already contain
@@ -254,6 +263,23 @@ function layout.sync(repo_fossil, def, root)
     if def.header_extra != nil then
         merge_config_text(repo_fossil, "header", def.header_extra, HEADER_MARKER_START, HEADER_MARKER_END)
     end
+    if def.search_wiki != nil then
+        sync_bool_setting(repo_fossil, "search-wiki", def.search_wiki)
+    end
+    if def.search_tkt != nil then
+        sync_bool_setting(repo_fossil, "search-tkt", def.search_tkt)
+    end
+end
+
+-- Fossil's own db_get_boolean() (src/db.c) accepts "1"/"0" among other
+-- forms -- used here rather than true/false literals since this is a
+-- plain SQL text column, not a typed one.
+function sync_bool_setting(repo_fossil, name, enabled)
+    value = "0"
+    if enabled == true then
+        value = "1"
+    end
+    set_config(repo_fossil, name, value)
 end
 
 return layout
