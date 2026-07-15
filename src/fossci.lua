@@ -26,6 +26,8 @@ do_view = view.do_view
 users = require("users")
 do_users = users.do_users
 
+layout = require("layout")
+
 cgi = require("cgi")
 
 function main()
@@ -52,6 +54,7 @@ function main()
         ["extension"] = do_extension,
         ["view"] = do_view,
         ["users"] = do_users,
+        ["layout"] = layout.do_layout,
     }
 
     arg[-1] = "lua"

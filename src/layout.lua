@@ -282,4 +282,58 @@ function sync_bool_setting(repo_fossil, name, enabled)
     set_config(repo_fossil, name, value)
 end
 
+-- CLI entry point: `fossci layout sync --repo-fossil <path>`.
+--
+-- layout.sync() otherwise only ever runs from inside cgi.handle_request(),
+-- which gates its ENTIRE body (including this call) behind a real
+-- check-in-capability check (cgi.lua's REQUIRED_CAPABILITY test) --
+-- confirmed live with a direct A/B test: an unauthenticated HTTP hit to
+-- /ext/fossci/ (403, no session cookie) left the served css/js/footer
+-- completely stale, while the exact same hit with a real admin session
+-- (200) refreshed it. A deploy-time reconciliation step has no browser
+-- session to offer, so it needs a path that bypasses the capability gate
+-- entirely rather than faking a login -- same reasoning as users.do_users
+-- being a plain CLI command instead of an HTTP-authenticated one.
+function layout.do_layout(cmd_args)
+    action = cmd_args[1]
+
+    if action != "sync" then
+        print("Usage: fossci layout sync --repo-fossil <path>")
+        return
+    end
+
+    repo_fossil = layout_find_repo_fossil_arg(cmd_args)
+    if repo_fossil == nil then
+        print("Usage: fossci layout sync --repo-fossil <path>")
+        return
+    end
+
+    config = require("config")
+    root = config.find_checkout_root()
+    def, err = layout.load(root)
+    if def == nil then
+        print("Error: " .. tostring(err))
+        return
+    end
+
+    layout.sync(repo_fossil, def, root)
+    print("layout.lua synced into " .. repo_fossil)
+end
+
+-- users.lua has an identically-shaped helper (same --repo-fossil <path>
+-- flag) named find_repo_fossil_arg -- Luam's top-level functions are all
+-- plain globals in the same interpreter state (both modules get
+-- `require`d into the same fossci.lua process), so an identically-NAMED
+-- function here would silently override whichever module loaded second.
+-- Named distinctly rather than risking that, same reasoning as this
+-- file's own config_layout_path vs users.lua's config_users_path.
+function layout_find_repo_fossil_arg(cmd_args)
+    for i, a in ipairs(cmd_args) do
+        if a == "--repo-fossil" then
+            return cmd_args[i + 1]
+        end
+    end
+    return nil
+end
+
 return layout
