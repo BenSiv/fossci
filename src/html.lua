@@ -955,7 +955,12 @@ function html.render_index(entity_types, show_sql_widget)
     items = ""
     for _, row in ipairs(entity_types) do
         escaped_name = html_escape(row.name)
-        items = items .. "<li><a href=\"fossci/browse?type=" .. escaped_name .. "\">" .. escaped_name .. "</a></li>"
+        count_badge = ""
+        if row.count != nil then
+            count_badge = "<span class=\"fossci-index-count\">" .. tostring(row.count) .. "</span>"
+        end
+        items = items .. "<li><a href=\"fossci/browse?type=" .. escaped_name .. "\">" .. escaped_name ..
+            "</a>" .. count_badge .. "</li>"
     end
 
     list_or_empty = "<ul class=\"fossci-index-list\">" .. items .. "</ul>"
@@ -999,10 +1004,20 @@ function html.render_index(entity_types, show_sql_widget)
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
         .fossci-index-list { list-style: none !important; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-        .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; }
+        .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; display: flex; align-items: center; }
         .fossci-index-list li::marker { content: ""; }
-        .fossci-index-list a { display: block; padding: 12px 16px; color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; text-transform: capitalize; }
-        .fossci-index-list a:hover { background: var(--fossci-bg-2, #f1f5f9); }
+        .fossci-index-list a { flex: 1; display: block; padding: 12px 16px; color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; text-transform: capitalize; }
+        .fossci-index-list a:hover { background: var(--fossci-bg-2, #f1f5f9); border-radius: 10px 0 0 10px; }
+        .fossci-index-count {
+            margin-right: 14px;
+            padding: 2px 9px;
+            border-radius: 999px;
+            background: var(--fossci-bg-2, #f1f5f9);
+            color: var(--fossci-th-text, #475569);
+            font-size: 0.78rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
         .fossci-empty {
             padding: 32px;
             text-align: center;

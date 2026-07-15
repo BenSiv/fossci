@@ -245,6 +245,9 @@ function cgi.handle_request()
 
     if path_info == "/" or path_info == "" then
         entity_types = schema.list(db_path)
+        for _, row in ipairs(entity_types) do
+            row.count = entity.count(db_path, row.name)
+        end
         index_capabilities = os.getenv("FOSSIL_CAPABILITIES")
         show_sql_widget = cgi.has_capability(index_capabilities, "s") or cgi.has_capability(index_capabilities, "a")
         body = html.render_index(entity_types, show_sql_widget)
