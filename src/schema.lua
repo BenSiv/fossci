@@ -113,7 +113,7 @@ function schema.register(db_path, def)
 end
 
 -- Always-present bookkeeping columns, independent of anything a schema
--- file declares -- benchling_id lets an external importer (e.g.
+-- file declares -- external_id lets an external importer (e.g.
 -- import_data_rest.py) look up "does a row for this source record
 -- already exist" and upsert instead of blindly re-creating it every
 -- sync run (a real, confirmed-live duplication bug this fixed: entity
@@ -125,7 +125,7 @@ BUILTIN_COLUMNS = {
     {name = "updated_by", sql_type = "TEXT"},
     {name = "updated_at", sql_type = "TEXT DEFAULT (datetime('now', 'localtime'))"},
     {name = "last_event_id", sql_type = "INTEGER"},
-    {name = "benchling_id", sql_type = "TEXT"},
+    {name = "external_id", sql_type = "TEXT"},
 }
 
 -- Creates the projected table if it doesn't exist, or adds any columns
@@ -145,7 +145,7 @@ function schema.sync_table(db_path, def)
             "CREATE TABLE %s (%s);", def.name, table.concat(columns, ", ")
         ))
         db.exec(db_path, string.format(
-            "CREATE INDEX IF NOT EXISTS idx_%s_benchling_id ON %s (benchling_id);", def.name, def.name
+            "CREATE INDEX IF NOT EXISTS idx_%s_external_id ON %s (external_id);", def.name, def.name
         ))
         return
     end
@@ -170,7 +170,7 @@ function schema.sync_table(db_path, def)
         end
     end
     db.exec(db_path, string.format(
-        "CREATE INDEX IF NOT EXISTS idx_%s_benchling_id ON %s (benchling_id);", def.name, def.name
+        "CREATE INDEX IF NOT EXISTS idx_%s_external_id ON %s (external_id);", def.name, def.name
     ))
 end
 
