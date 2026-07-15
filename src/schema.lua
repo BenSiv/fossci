@@ -112,22 +112,40 @@ function schema.register(db_path, def)
     return true
 end
 
+-- Always-present bookkeeping columns, independent of anything a schema
+-- file declares -- benchling_id lets an external importer (e.g.
+-- import_data_rest.py) look up "does a row for this source record
+-- already exist" and upsert instead of blindly re-creating it every
+-- sync run (a real, confirmed-live duplication bug this fixed: entity
+-- tables had no external-id concept at all, so every run re-inserted
+-- every source row from scratch).
+BUILTIN_COLUMNS = {
+    {name = "created_by", sql_type = "TEXT"},
+    {name = "created_at", sql_type = "TEXT DEFAULT (datetime('now', 'localtime'))"},
+    {name = "updated_by", sql_type = "TEXT"},
+    {name = "updated_at", sql_type = "TEXT DEFAULT (datetime('now', 'localtime'))"},
+    {name = "last_event_id", sql_type = "INTEGER"},
+    {name = "benchling_id", sql_type = "TEXT"},
+}
+
 -- Creates the projected table if it doesn't exist, or adds any columns
--- for fields that aren't present yet. Never drops or renames a column --
--- that's a deliberately manual, reviewed operation, not an automatic one.
+-- for fields/builtins that aren't present yet. Never drops or renames a
+-- column -- that's a deliberately manual, reviewed operation, not an
+-- automatic one.
 function schema.sync_table(db_path, def)
     if db.table_exists(db_path, def.name) == false then
         columns = {"id INTEGER PRIMARY KEY AUTOINCREMENT"}
         for _, field in ipairs(def.fields) do
             table.insert(columns, field.name .. " " .. SQL_TYPE[field.type])
         end
-        table.insert(columns, "created_by TEXT")
-        table.insert(columns, "created_at TEXT DEFAULT (datetime('now', 'localtime'))")
-        table.insert(columns, "updated_by TEXT")
-        table.insert(columns, "updated_at TEXT DEFAULT (datetime('now', 'localtime'))")
-        table.insert(columns, "last_event_id INTEGER")
+        for _, builtin in ipairs(BUILTIN_COLUMNS) do
+            table.insert(columns, builtin.name .. " " .. builtin.sql_type)
+        end
         db.exec(db_path, string.format(
             "CREATE TABLE %s (%s);", def.name, table.concat(columns, ", ")
+        ))
+        db.exec(db_path, string.format(
+            "CREATE INDEX IF NOT EXISTS idx_%s_benchling_id ON %s (benchling_id);", def.name, def.name
         ))
         return
     end
@@ -144,6 +162,16 @@ function schema.sync_table(db_path, def)
             ))
         end
     end
+    for _, builtin in ipairs(BUILTIN_COLUMNS) do
+        if have[builtin.name] == nil then
+            db.exec(db_path, string.format(
+                "ALTER TABLE %s ADD COLUMN %s %s;", def.name, builtin.name, builtin.sql_type
+            ))
+        end
+    end
+    db.exec(db_path, string.format(
+        "CREATE INDEX IF NOT EXISTS idx_%s_benchling_id ON %s (benchling_id);", def.name, def.name
+    ))
 end
 
 -- Scans the schemas directory, registers any schema files found,
