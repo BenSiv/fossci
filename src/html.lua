@@ -1192,14 +1192,42 @@ function html.render_sql(sql_text, column_names, rows, err, ref_columns)
         .fossci-entity-ref { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
         .fossci-entity-ref::after { content: " \2197"; font-size: 0.85em; }
         .fossci-entity-ref:hover { text-decoration: underline; }
+        .fossci-nlsql { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .fossci-nlsql input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid var(--fossci-border, #e2e8f0);
+            border-radius: 8px;
+            background: var(--fossci-bg, #f8fafc);
+            color: var(--fossci-input-text, #1e293b);
+            font-size: 0.9rem;
+        }
+        .btn-secondary {
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border: 1px solid var(--fossci-border, #e2e8f0);
+            background: var(--fossci-bg-2, #f1f5f9);
+            color: var(--fossci-text, #334155);
+            white-space: nowrap;
+        }
+        .btn-secondary:disabled { opacity: 0.6; cursor: default; }
+        .fossci-nlsql-status { font-size: 0.8rem; color: var(--fossci-muted, #64748b); white-space: nowrap; }
     </style>
     <div class="fossci-container">
         <div class="fossci-header">
             <h2>Query</h2>
             <p>Read-only (SELECT only) queries against the entity store. Setup/Admin only.</p>
         </div>
+        <div class="fossci-nlsql" id="fossci-nlsql">
+            <input type="text" id="fossci-nlsql-input" placeholder="Ask the agent to write or update this query in plain English..." autocomplete="off" />
+            <button type="button" class="btn-secondary" id="fossci-nlsql-btn">Generate query</button>
+            <span class="fossci-nlsql-status" id="fossci-nlsql-status"></span>
+        </div>
         <form method="get" action="fossci/sql">
-            <textarea class="fossci-sql-input" name="q" placeholder="SELECT * FROM sample LIMIT 20;">%s</textarea>
+            <textarea class="fossci-sql-input" id="fossci-sql-query" name="q" placeholder="SELECT * FROM sample LIMIT 20;">%s</textarea>
             <button class="btn-primary" type="submit">Run</button>
         </form>
         %s
