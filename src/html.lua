@@ -520,29 +520,42 @@ end
 -- a heuristic like "first text field" was considered and rejected: a
 -- real schema's first text-type field is often not the one a human
 -- would pick (e.g. plant's is "genetic_group", not species/variety).
+-- A bare number (e.g. "343" for an experiment) reads as ambiguous --
+-- could be mistaken for the id itself -- while a text value (a lab
+-- name, a compound name) is already self-explanatory on its own. Only
+-- number-typed display fields get the entity type name prefixed, e.g.
+-- "experiment 343" rather than a bare "343"; text/select fields are
+-- left exactly as declared.
+function format_display_label(entity_type, field, raw_value)
+    if field.type == "number" then
+        return entity_type .. " " .. tostring(raw_value)
+    end
+    return tostring(raw_value)
+end
+
 function entity_display_label(db_path, entity_type, entity_id)
     fields = schema.fields(db_path, entity_type)
     if fields == nil then
         return nil
     end
-    display_field_name = nil
+    display_field = nil
     for _, f in ipairs(fields) do
         if tonumber(f.display) == 1 then
-            display_field_name = f.name
+            display_field = f
             break
         end
     end
-    if display_field_name == nil then
+    if display_field == nil then
         return nil
     end
     rows = db.query(db_path, string.format(
         "SELECT %s AS label FROM %s WHERE id = %s;",
-        display_field_name, entity_type, db.quote(entity_id)
+        display_field.name, entity_type, db.quote(entity_id)
     ))
     if rows == nil or rows[1] == nil or rows[1].label == nil or tostring(rows[1].label) == "" then
         return nil
     end
-    return tostring(rows[1].label)
+    return format_display_label(entity_type, display_field, rows[1].label)
 end
 
 -- Same display-field convention as entity_display_label, but for a row
@@ -557,7 +570,7 @@ function own_row_label(db_path, entity_type, row)
         if tonumber(f.display) == 1 then
             value = row[f.name]
             if value != nil and tostring(value) != "" then
-                return tostring(value)
+                return format_display_label(entity_type, f, value)
             end
             return nil
         end

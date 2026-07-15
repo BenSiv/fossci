@@ -342,7 +342,16 @@ function cgi.handle_request()
             sql_text = "SELECT * FROM sample LIMIT 20;"
         elseif sql_text != "" then
             column_names, rows, sql_err = view.run_adhoc(db_path, sql_text)
-            ref_columns = view.reference_columns(db_path, view.guess_from_table(sql_text))
+            from_table = view.guess_from_table(sql_text)
+            ref_columns = view.reference_columns(db_path, from_table)
+            -- The queried table's own "id" column had no link at all --
+            -- render_reference_value already does exactly what's needed
+            -- (an entity-type + id pair -> a real link with a display
+            -- label), so treating "id" as if it referenced from_table
+            -- itself reuses that path entirely rather than duplicating it.
+            if from_table != nil and schema.is_registered(db_path, from_table) then
+                ref_columns["id"] = from_table
+            end
         end
         body = html.render_sql(db_path, sql_text, column_names, rows, sql_err, ref_columns)
         return print_response("200 OK", "text/html", body)
