@@ -334,12 +334,14 @@ function cgi.handle_request()
         column_names = nil
         rows = nil
         sql_err = nil
+        ref_columns = {}
         if sql_text == nil then
             sql_text = "SELECT * FROM sample LIMIT 20;"
         elseif sql_text != "" then
             column_names, rows, sql_err = view.run_adhoc(db_path, sql_text)
+            ref_columns = view.reference_columns(db_path, view.guess_from_table(sql_text))
         end
-        body = html.render_sql(sql_text, column_names, rows, sql_err)
+        body = html.render_sql(sql_text, column_names, rows, sql_err, ref_columns)
         return print_response("200 OK", "text/html", body)
     end
 

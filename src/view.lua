@@ -281,6 +281,38 @@ end
 -- from db.query's rows (which are unordered Lua tables keyed by
 -- column name) so results render with real, ordered headers even for
 -- an empty result set.
+-- Best-effort single-table guess for "which entity_field rows apply to
+-- this query's results" -- covers the common `SELECT ... FROM <table>`
+-- case (including the default example query), not joins/subqueries/
+-- aliases. Real column-provenance tracking for arbitrary SQL would need
+-- actual parsing; this is deliberately just a heuristic so the common
+-- case gets reference-column links without that much bigger effort.
+function view.guess_from_table(sql_text)
+    table_name = string.match(sql_text, "[Ff][Rr][Oo][Mm]%s+([A-Za-z_][A-Za-z0-9_]*)")
+    return table_name
+end
+
+-- {column_name -> ref_entity_type} for a table's reference-type fields,
+-- via the same entity_field metadata schema.layout() already exposes
+-- (see html.lua's display_field_value) -- used here directly by table
+-- name since an ad-hoc query has no schema.layout() call of its own.
+function view.reference_columns(db_path, table_name)
+    if table_name == nil then
+        return {}
+    end
+    rows = db.query(db_path, string.format(
+        "SELECT name, ref_entity_type FROM entity_field WHERE entity_type = %s AND type = 'reference';",
+        db.quote(table_name)
+    ))
+    columns = {}
+    if rows != nil then
+        for _, row in ipairs(rows) do
+            columns[row.name] = row.ref_entity_type
+        end
+    end
+    return columns
+end
+
 function view.run_adhoc(db_path, sql_text)
     if view.is_select_only(sql_text) == false then
         return nil, nil, "refusing to run: not a plain SELECT"

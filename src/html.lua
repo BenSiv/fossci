@@ -498,6 +498,36 @@ function display_value(value)
     return html_escape(value)
 end
 
+-- Reference-type field values are a raw entity id -- fossci has no
+-- general "display name" concept for entities (confirmed directly:
+-- entity tables carry no "name" column at all, only whatever fields
+-- each schema declares; /browse and /detail already only ever show
+-- "#<id>" for the row's own identity too), so this can't resolve to a
+-- human-readable name -- it renders the id as a real, styled link to
+-- the referenced entity's own detail page instead of a disconnected
+-- bare number, matching how the row's own id already links out in
+-- render_browse below. "fossci/detail..." (no leading slash) is
+-- intentional -- see render_browse's own identical link for why
+-- (relative to this page's own <base>, which lacks a trailing slash).
+function render_reference_value(ref_entity_type, value)
+    if value == nil or tostring(value) == "" then
+        return "&mdash;"
+    end
+    escaped_type = html_escape(ref_entity_type)
+    escaped_id = html_escape(tostring(value))
+    return "<a href=\"fossci/detail?type=" .. escaped_type .. "&entity_id=" .. escaped_id ..
+        "\" class=\"fossci-entity-ref\">#" .. escaped_id .. "</a>"
+end
+
+-- Picks the right renderer for a field's value, given its schema.layout()
+-- metadata (type + ref_entity_type, when type=="reference").
+function display_field_value(field, value)
+    if field.type == "reference" and field.ref_entity_type != nil then
+        return render_reference_value(field.ref_entity_type, value)
+    end
+    return display_value(value)
+end
+
 -- Browse view: a read-only table of every entity of a type, linking to
 -- each one's detail page. Pure server-rendered HTML -- no JS, so none
 -- of the CSP/nonce concerns the registration table's client-side JS
@@ -515,7 +545,7 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
         cells = "<td><a href=\"fossci/detail?type=" .. escaped_type .. "&entity_id=" .. tostring(row.id) ..
             "\">#" .. tostring(row.id) .. "</a></td>"
         for _, field in ipairs(layout.fields) do
-            cells = cells .. "<td>" .. display_value(row[field.name]) .. "</td>"
+            cells = cells .. "<td>" .. display_field_value(field, row[field.name]) .. "</td>"
         end
         body_rows = body_rows .. "<tr>" .. cells .. "</tr>"
     end
@@ -629,6 +659,9 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
         .fossci-pager-links { display: flex; gap: 14px; align-items: center; }
         .fossci-pager-links a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
         .fossci-pager-links a:hover { text-decoration: underline; }
+        .fossci-entity-ref { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
+        .fossci-entity-ref::after { content: " \2197"; font-size: 0.85em; }
+        .fossci-entity-ref:hover { text-decoration: underline; }
     </style>
 
     <div class="fossci-container">
@@ -656,7 +689,7 @@ function html.render_detail(entity_type, layout, row, history)
     for _, field in ipairs(layout.fields) do
         fields_html = fields_html .. "<div class=\"detail-row\"><span class=\"detail-label\">" ..
             html_escape(field.label) .. "</span><span class=\"detail-value\">" ..
-            display_value(row[field.name]) .. "</span></div>"
+            display_field_value(field, row[field.name]) .. "</span></div>"
     end
 
     history_rows = ""
@@ -722,6 +755,9 @@ function html.render_detail(entity_type, layout, row, history)
         #history-table td { background: #ffffff; }
         .change-item { margin-bottom: 4px; }
         .change-item:last-child { margin-bottom: 0; }
+        .fossci-entity-ref { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
+        .fossci-entity-ref::after { content: " \2197"; font-size: 0.85em; }
+        .fossci-entity-ref:hover { text-decoration: underline; }
     </style>
 
     <div class="fossci-container">
@@ -1053,7 +1089,10 @@ end
 -- the query is a normal, bookmarkable/shareable URL. `column_names`/
 -- `rows` are nil until a query has been run; `err` is set instead if
 -- it failed (not select-only, invalid sql, etc.).
-function html.render_sql(sql_text, column_names, rows, err)
+function html.render_sql(sql_text, column_names, rows, err, ref_columns)
+    if ref_columns == nil then
+        ref_columns = {}
+    end
     sql_text_or_empty = sql_text
     if sql_text_or_empty == nil then
         sql_text_or_empty = ""
@@ -1072,7 +1111,12 @@ function html.render_sql(sql_text, column_names, rows, err)
         for _, row in ipairs(rows) do
             cells = ""
             for _, name in ipairs(column_names) do
-                cells = cells .. "<td>" .. display_value(row[name]) .. "</td>"
+                ref_type = ref_columns[name]
+                if ref_type != nil then
+                    cells = cells .. "<td>" .. render_reference_value(ref_type, row[name]) .. "</td>"
+                else
+                    cells = cells .. "<td>" .. display_value(row[name]) .. "</td>"
+                end
             end
             body_rows = body_rows .. "<tr>" .. cells .. "</tr>"
         end
@@ -1145,6 +1189,9 @@ function html.render_sql(sql_text, column_names, rows, err)
         #sql-table th { background: var(--fossci-bg-2, #f1f5f9); font-weight: 600; font-size: 0.75rem; color: var(--fossci-th-text, #475569); text-transform: uppercase; letter-spacing: 0.06em; }
         #sql-table td { background: #ffffff; }
         .fossci-empty { margin-top: 20px; padding: 24px; text-align: center; color: var(--fossci-muted, #64748b); background: var(--fossci-bg, #f8fafc); border: 1px dashed var(--fossci-border, #e2e8f0); border-radius: 12px; }
+        .fossci-entity-ref { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
+        .fossci-entity-ref::after { content: " \2197"; font-size: 0.85em; }
+        .fossci-entity-ref:hover { text-decoration: underline; }
     </style>
     <div class="fossci-container">
         <div class="fossci-header">
