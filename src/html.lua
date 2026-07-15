@@ -1089,7 +1089,7 @@ function html.render_templates_list(entries)
             end
             escaped_label = html_escape(label)
             escaped_desc = html_escape(description)
-            items = items .. "<li><a href=\"fossci/template?template_name=" .. escaped_name .. "\">" ..
+            items = items .. "<li><a href=\"/ext/fossci/template?template_name=" .. escaped_name .. "\">" ..
                 escaped_label .. "</a><p>" .. escaped_desc .. "</p></li>"
         end
     end
@@ -1135,7 +1135,7 @@ function html.render_templates_list(entries)
     <div class="fossci-container">
         <div class="fossci-header">
             <h2>Entry templates</h2>
-            <p>Pick a template, copy the generated snippet, and paste it into a new wiki page you create.</p>
+            <p>Pick a template to create a new wiki page from it, or <a href="/ext/fossci/wiki-new">start a blank page</a>.</p>
         </div>
         %s
     </div>
@@ -1146,7 +1146,10 @@ end
 -- The rendered Markdown snippet for one template, in a read-only
 -- textarea for easy select-all-and-copy -- no JS needed (a "Copy"
 -- button would need one, and this is simple enough not to bother).
-function html.render_template(def, rendered_markdown)
+function html.render_template(def, rendered_markdown, nonce)
+    if nonce == nil then
+        nonce = ""
+    end
     label = def.label
     if label == nil then
         label = def.name
@@ -1190,18 +1193,227 @@ function html.render_template(def, rendered_markdown)
             background: var(--fossci-bg, #f8fafc);
             color: var(--fossci-input-text, #1e293b);
         }
+        .fossci-create-block {
+            margin-top: 16px;
+            padding: 16px;
+            border: 1px solid var(--fossci-border, #e2e8f0);
+            border-radius: 12px;
+            background: var(--fossci-bg, #f8fafc);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+        .fossci-create-block label { font-weight: 600; font-size: 0.9rem; }
+        .fossci-create-block input[type="text"] {
+            flex: 1 1 260px;
+            padding: 8px 10px;
+            border: 1px solid var(--fossci-border, #e2e8f0);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: var(--fossci-input-text, #1e293b);
+        }
+        .fossci-create-block button {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 8px;
+            background: var(--fossci-accent, #4f46e5);
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .fossci-create-block button:hover { opacity: 0.9; }
+        .fossci-create-status { flex-basis: 100%%; font-size: 0.85rem; color: var(--fossci-muted, #64748b); }
+        .fossci-create-status.error { color: #991b1b; }
     </style>
     <div class="fossci-container">
         <div class="fossci-header">
             <h2>%s</h2>
             <p>%s</p>
-            <p><a href="fossci/templates">&larr; All templates</a></p>
+            <p><a href="/ext/fossci/templates">&larr; All templates</a></p>
         </div>
-        <p>Click inside, select all (Ctrl/Cmd+A), copy, then paste into a new wiki page (Fossil: All pages &rarr; New).</p>
-        <textarea class="fossci-snippet" readonly>%s</textarea>
+        <p>Edit the snippet below if needed, then create a new wiki page from it directly.</p>
+        <textarea class="fossci-snippet" id="fossci-template-content">%s</textarea>
+        <div class="fossci-create-block">
+            <label for="fossci-new-page-name">New page name</label>
+            <input type="text" id="fossci-new-page-name" placeholder="e.g. Experiment 512 - Fermentation Run">
+            <button type="button" id="fossci-create-from-template">Create wiki page</button>
+            <div class="fossci-create-status" id="fossci-create-status"></div>
+        </div>
     </div>
+    <script nonce="%s">
+    (function(){
+        var btn = document.getElementById('fossci-create-from-template');
+        var nameInput = document.getElementById('fossci-new-page-name');
+        var content = document.getElementById('fossci-template-content');
+        var status = document.getElementById('fossci-create-status');
+        btn.addEventListener('click', function(){
+            var name = nameInput.value.trim();
+            status.className = 'fossci-create-status';
+            if(!name){
+                status.className = 'fossci-create-status error';
+                status.textContent = 'Enter a page name first.';
+                return;
+            }
+            status.textContent = 'Creating...';
+            btn.disabled = true;
+            fetch('/ext/fossci/wiki-create', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: name, content: content.value, mimetype: 'text/x-markdown'})
+            }).then(function(resp){ return resp.json(); }).then(function(data){
+                if(data && data.success){
+                    window.location.href = '/wiki?name=' + encodeURIComponent(name);
+                }else{
+                    btn.disabled = false;
+                    status.className = 'fossci-create-status error';
+                    status.textContent = (data && data.error) || 'Failed to create page.';
+                }
+            }).catch(function(err){
+                btn.disabled = false;
+                status.className = 'fossci-create-status error';
+                status.textContent = 'Request failed: ' + (err && err.message ? err.message : err);
+            });
+        });
+    })();
+    </script>
 </div>
-""", escaped_label, escaped_label, escaped_desc, escaped_body)
+""", escaped_label, escaped_label, escaped_desc, escaped_body, nonce)
+end
+
+-- Blank "create a new wiki page" form -- fills the "Notebook has no new
+-- page entry point" gap without reimplementing Fossil's own wiki editor;
+-- this just collects a name + optional starting content and hands off
+-- to the same /wiki-create route the template page uses, then lands on
+-- Fossil's native page view (which links to its own /wikiedit for
+-- further editing).
+function html.render_wiki_new(err, prefill_name, prefill_content, nonce)
+    if nonce == nil then
+        nonce = ""
+    end
+    escaped_name = ""
+    if prefill_name != nil then
+        escaped_name = html_escape(prefill_name)
+    end
+    escaped_content = ""
+    if prefill_content != nil then
+        escaped_content = html_escape(prefill_content)
+    end
+    error_html = ""
+    if err != nil and err != "" then
+        error_html = "<p class=\"fossci-create-status error\">" .. html_escape(err) .. "</p>"
+    end
+
+    return string.format("""
+<div class="fossil-doc" data-title="New wiki page">
+    <style>
+        .fossci-container {
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--fossci-text, #334155);
+            background: #ffffff;
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin: 20px auto;
+            max-width: 900px;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
+        }
+        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
+        .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
+        .fossci-header a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
+        .fossci-header a:hover { text-decoration: underline; }
+        .fossci-field { margin-bottom: 14px; }
+        .fossci-field label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
+        .fossci-field input[type="text"] {
+            width: 100%%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            border: 1px solid var(--fossci-border, #e2e8f0);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            color: var(--fossci-input-text, #1e293b);
+        }
+        .fossci-field textarea {
+            width: 100%%;
+            min-height: 320px;
+            box-sizing: border-box;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.88rem;
+            padding: 16px;
+            border: 1px solid var(--fossci-border, #e2e8f0);
+            border-radius: 12px;
+            background: var(--fossci-bg, #f8fafc);
+            color: var(--fossci-input-text, #1e293b);
+        }
+        .fossci-create-status { font-size: 0.9rem; margin: 10px 0; color: var(--fossci-muted, #64748b); }
+        .fossci-create-status.error { color: #991b1b; }
+        #fossci-wiki-new-submit {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            background: var(--fossci-accent, #4f46e5);
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        #fossci-wiki-new-submit:hover { opacity: 0.9; }
+    </style>
+    <div class="fossci-container">
+        <div class="fossci-header">
+            <h2>New wiki page</h2>
+            <p>Or start from an <a href="/ext/fossci/templates">entry template</a> instead.</p>
+        </div>
+        %s
+        <div class="fossci-field">
+            <label for="fossci-wiki-new-name">Page name</label>
+            <input type="text" id="fossci-wiki-new-name" value="%s" placeholder="e.g. Notebook/2026-07-15 Fermentation Notes">
+        </div>
+        <div class="fossci-field">
+            <label for="fossci-wiki-new-content">Content (Markdown, optional)</label>
+            <textarea id="fossci-wiki-new-content">%s</textarea>
+        </div>
+        <div id="fossci-wiki-new-status" class="fossci-create-status"></div>
+        <button type="button" id="fossci-wiki-new-submit">Create page</button>
+    </div>
+    <script nonce="%s">
+    (function(){
+        var btn = document.getElementById('fossci-wiki-new-submit');
+        var nameInput = document.getElementById('fossci-wiki-new-name');
+        var content = document.getElementById('fossci-wiki-new-content');
+        var status = document.getElementById('fossci-wiki-new-status');
+        btn.addEventListener('click', function(){
+            var name = nameInput.value.trim();
+            status.className = 'fossci-create-status';
+            if(!name){
+                status.className = 'fossci-create-status error';
+                status.textContent = 'Enter a page name first.';
+                return;
+            }
+            status.textContent = 'Creating...';
+            btn.disabled = true;
+            fetch('/ext/fossci/wiki-create', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: name, content: content.value, mimetype: 'text/x-markdown'})
+            }).then(function(resp){ return resp.json(); }).then(function(data){
+                if(data && data.success){
+                    window.location.href = '/wiki?name=' + encodeURIComponent(name);
+                }else{
+                    btn.disabled = false;
+                    status.className = 'fossci-create-status error';
+                    status.textContent = (data && data.error) || 'Failed to create page.';
+                }
+            }).catch(function(err){
+                btn.disabled = false;
+                status.className = 'fossci-create-status error';
+                status.textContent = 'Request failed: ' + (err && err.message ? err.message : err);
+            });
+        });
+    })();
+    </script>
+</div>
+""", error_html, escaped_name, escaped_content, nonce)
 end
 
 -- Ad-hoc SQL console (Setup/Admin only -- see cgi.lua's /sql route):

@@ -7,6 +7,7 @@ view = require("view")
 template = require("template")
 html = require("html")
 layout = require("layout")
+wiki = require("wiki")
 json = require("dkjson")
 paths = require("paths")
 
@@ -376,8 +377,26 @@ function cgi.handle_request()
         end
 
         rendered = template.render(template_def)
-        body = html.render_template(template_def, rendered)
+        body = html.render_template(template_def, rendered, default_value(os.getenv("FOSSIL_NONCE"), ""))
         return print_response("200 OK", "text/html", body)
+    end
+
+    if path_info == "/wiki-new" then
+        body = html.render_wiki_new(nil, params.name, params.content, default_value(os.getenv("FOSSIL_NONCE"), ""))
+        return print_response("200 OK", "text/html", body)
+    end
+
+    if path_info == "/wiki-create" and method == "POST" then
+        input = io.read("*all")
+        req, _, err = json.decode(input)
+        if req == nil then
+            return print_response("400 Bad Request", "application/json", json.encode({success = false, error = "Invalid JSON: " .. tostring(err)}))
+        end
+        ok, msg = wiki.create_page(repo_fossil, req.name, req.content, req.mimetype, author)
+        if not ok then
+            return print_response("200 OK", "application/json", json.encode({success = false, error = msg}))
+        end
+        return print_response("200 OK", "application/json", json.encode({success = true, name = req.name}))
     end
 
     if path_info == "/api/autocomplete" then
