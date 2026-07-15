@@ -83,7 +83,24 @@ end
 
 -- Registers a validated schema definition: upserts entity_type/entity_field
 -- rows, then creates or migrates the projected table.
+-- entity_field predates the `display` flag (see schema.fields()'s own
+-- header comment on entity_display_label in html.lua) -- ledger.lua's
+-- CREATE TABLE IF NOT EXISTS never retrofits an existing table, so this
+-- migrates it the same way sync_table() already migrates per-type
+-- tables: additive, idempotent, safe to re-run on every sync.
+function ensure_entity_field_display_column(db_path)
+    existing = db.get_columns(db_path, "entity_field")
+    have = {}
+    for _, name in ipairs(existing) do
+        have[name] = true
+    end
+    if have["display"] == nil then
+        db.exec(db_path, "ALTER TABLE entity_field ADD COLUMN display INTEGER DEFAULT 0;")
+    end
+end
+
 function schema.register(db_path, def)
+    ensure_entity_field_display_column(db_path)
     db.exec(db_path, string.format(
         "INSERT OR IGNORE INTO entity_type (name) VALUES (%s);", db.quote(def.name)
     ))
@@ -98,13 +115,18 @@ function schema.register(db_path, def)
         if field.required == true then
             required_flag = 1
         end
+        display_flag = 0
+        if field.display == true then
+            display_flag = 1
+        end
         db.exec(db_path, string.format(
-            "INSERT OR REPLACE INTO entity_field (entity_type, name, type, required, enum_values, ref_entity_type, field_order) VALUES (%s, %s, %s, %d, %s, %s, %d);",
+            "INSERT OR REPLACE INTO entity_field (entity_type, name, type, required, enum_values, ref_entity_type, field_order, display) VALUES (%s, %s, %s, %d, %s, %s, %d, %d);",
             db.quote(def.name), db.quote(field.name), db.quote(field.type),
             required_flag,
             db.literal(enum_json),
             db.literal(field.entity_type),
-            i
+            i,
+            display_flag
         ))
     end
 

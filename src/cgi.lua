@@ -239,7 +239,7 @@ function cgi.handle_request()
         total = entity.count(db_path, entity_type)
         offset = (page - 1) * BROWSE_PAGE_SIZE
         rows = entity.list(db_path, entity_type, BROWSE_PAGE_SIZE, offset)
-        body = html.render_browse(entity_type, layout, rows, page, BROWSE_PAGE_SIZE, total)
+        body = html.render_browse(db_path, entity_type, layout, rows, page, BROWSE_PAGE_SIZE, total)
         return print_response("200 OK", "text/html", body)
     end
 
@@ -281,7 +281,7 @@ function cgi.handle_request()
         end
 
         history = ledger.history(db_path, entity_id)
-        body = html.render_detail(entity_type, layout, row, history)
+        body = html.render_detail(db_path, entity_type, layout, row, history)
         return print_response("200 OK", "text/html", body)
     end
 
@@ -341,7 +341,7 @@ function cgi.handle_request()
             column_names, rows, sql_err = view.run_adhoc(db_path, sql_text)
             ref_columns = view.reference_columns(db_path, view.guess_from_table(sql_text))
         end
-        body = html.render_sql(sql_text, column_names, rows, sql_err, ref_columns)
+        body = html.render_sql(db_path, sql_text, column_names, rows, sql_err, ref_columns)
         return print_response("200 OK", "text/html", body)
     end
 

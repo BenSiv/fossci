@@ -1,3 +1,6 @@
+db = require("db")
+schema = require("schema")
+
 html = {}
 
 -- Entity field values and (in principle) entity_type ultimately come
@@ -509,21 +512,79 @@ end
 -- render_browse below. "fossci/detail..." (no leading slash) is
 -- intentional -- see render_browse's own identical link for why
 -- (relative to this page's own <base>, which lacks a trailing slash).
-function render_reference_value(ref_entity_type, value)
+-- fossci's entity tables carry no built-in "name" column at all --
+-- schema authors mark ONE field {display = true} in schemas/*.lua when
+-- an id alone isn't a useful label (see schema.lua's entity_field.display
+-- column). Returns nil (caller falls back to "#id") when the referenced
+-- type has no field marked, or when that field is empty for this row --
+-- a heuristic like "first text field" was considered and rejected: a
+-- real schema's first text-type field is often not the one a human
+-- would pick (e.g. plant's is "genetic_group", not species/variety).
+function entity_display_label(db_path, entity_type, entity_id)
+    fields = schema.fields(db_path, entity_type)
+    if fields == nil then
+        return nil
+    end
+    display_field_name = nil
+    for _, f in ipairs(fields) do
+        if tonumber(f.display) == 1 then
+            display_field_name = f.name
+            break
+        end
+    end
+    if display_field_name == nil then
+        return nil
+    end
+    rows = db.query(db_path, string.format(
+        "SELECT %s AS label FROM %s WHERE id = %s;",
+        display_field_name, entity_type, db.quote(entity_id)
+    ))
+    if rows == nil or rows[1] == nil or rows[1].label == nil or tostring(rows[1].label) == "" then
+        return nil
+    end
+    return tostring(rows[1].label)
+end
+
+-- Same display-field convention as entity_display_label, but for a row
+-- this page already has fully loaded -- no second query needed, just a
+-- schema.fields() lookup to find which column (if any) is marked.
+function own_row_label(db_path, entity_type, row)
+    fields = schema.fields(db_path, entity_type)
+    if fields == nil then
+        return nil
+    end
+    for _, f in ipairs(fields) do
+        if tonumber(f.display) == 1 then
+            value = row[f.name]
+            if value != nil and tostring(value) != "" then
+                return tostring(value)
+            end
+            return nil
+        end
+    end
+    return nil
+end
+
+function render_reference_value(db_path, ref_entity_type, value)
     if value == nil or tostring(value) == "" then
         return "&mdash;"
     end
     escaped_type = html_escape(ref_entity_type)
     escaped_id = html_escape(tostring(value))
+    link_text = "#" .. escaped_id
+    label = entity_display_label(db_path, ref_entity_type, value)
+    if label != nil then
+        link_text = html_escape(label)
+    end
     return "<a href=\"fossci/detail?type=" .. escaped_type .. "&entity_id=" .. escaped_id ..
-        "\" class=\"fossci-entity-ref\">#" .. escaped_id .. "</a>"
+        "\" class=\"fossci-entity-ref\">" .. link_text .. "</a>"
 end
 
 -- Picks the right renderer for a field's value, given its schema.layout()
 -- metadata (type + ref_entity_type, when type=="reference").
-function display_field_value(field, value)
+function display_field_value(db_path, field, value)
     if field.type == "reference" and field.ref_entity_type != nil then
-        return render_reference_value(field.ref_entity_type, value)
+        return render_reference_value(db_path, field.ref_entity_type, value)
     end
     return display_value(value)
 end
@@ -532,7 +593,7 @@ end
 -- each one's detail page. Pure server-rendered HTML -- no JS, so none
 -- of the CSP/nonce concerns the registration table's client-side JS
 -- has (see html.render's header comment for why that one needs one).
-function html.render_browse(entity_type, layout, rows, page, page_size, total)
+function html.render_browse(db_path, entity_type, layout, rows, page, page_size, total)
     escaped_type = html_escape(entity_type)
 
     header_cells = "<th>ID</th>"
@@ -542,10 +603,15 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
 
     body_rows = ""
     for _, row in ipairs(rows) do
+        own_label = own_row_label(db_path, entity_type, row)
+        id_link_text = "#" .. tostring(row.id)
+        if own_label != nil then
+            id_link_text = html_escape(own_label)
+        end
         cells = "<td><a href=\"fossci/detail?type=" .. escaped_type .. "&entity_id=" .. tostring(row.id) ..
-            "\">#" .. tostring(row.id) .. "</a></td>"
+            "\">" .. id_link_text .. "</a></td>"
         for _, field in ipairs(layout.fields) do
-            cells = cells .. "<td>" .. display_field_value(field, row[field.name]) .. "</td>"
+            cells = cells .. "<td>" .. display_field_value(db_path, field, row[field.name]) .. "</td>"
         end
         body_rows = body_rows .. "<tr>" .. cells .. "</tr>"
     end
@@ -685,15 +751,20 @@ end
 
 -- Detail view: current field values plus the full ledger history for
 -- one entity. Also pure server-rendered HTML, no JS.
-function html.render_detail(entity_type, layout, row, history)
+function html.render_detail(db_path, entity_type, layout, row, history)
     escaped_type = html_escape(entity_type)
     id_str = tostring(row.id)
+    own_label = own_row_label(db_path, entity_type, row)
+    title_id_part = "#" .. id_str
+    if own_label != nil then
+        title_id_part = html_escape(own_label) .. " (#" .. id_str .. ")"
+    end
 
     fields_html = ""
     for _, field in ipairs(layout.fields) do
         fields_html = fields_html .. "<div class=\"detail-row\"><span class=\"detail-label\">" ..
             html_escape(field.label) .. "</span><span class=\"detail-value\">" ..
-            display_field_value(field, row[field.name]) .. "</span></div>"
+            display_field_value(db_path, field, row[field.name]) .. "</span></div>"
     end
 
     history_rows = ""
@@ -709,7 +780,7 @@ function html.render_detail(entity_type, layout, row, history)
     end
 
     return string.format("""
-<div class="fossil-doc" data-title="%s #%s">
+<div class="fossil-doc" data-title="%s %s">
     <style>
         .fossci-container {
             font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -766,7 +837,7 @@ function html.render_detail(entity_type, layout, row, history)
 
     <div class="fossci-container">
         <div class="fossci-header">
-            <h2>%s #%s</h2>
+            <h2>%s %s</h2>
             <a href="fossci/browse?type=%s">&larr; Back to browse</a>
         </div>
 
@@ -783,7 +854,7 @@ function html.render_detail(entity_type, layout, row, history)
         </div>
     </div>
 </div>
-""", escaped_type, id_str, escaped_type, id_str, escaped_type, fields_html, history_rows)
+""", escaped_type, title_id_part, escaped_type, title_id_part, escaped_type, fields_html, history_rows)
 end
 
 -- Generic view: any approved custom SQL view rendered as a table.
@@ -1093,7 +1164,7 @@ end
 -- the query is a normal, bookmarkable/shareable URL. `column_names`/
 -- `rows` are nil until a query has been run; `err` is set instead if
 -- it failed (not select-only, invalid sql, etc.).
-function html.render_sql(sql_text, column_names, rows, err, ref_columns)
+function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns)
     if ref_columns == nil then
         ref_columns = {}
     end
@@ -1117,7 +1188,7 @@ function html.render_sql(sql_text, column_names, rows, err, ref_columns)
             for _, name in ipairs(column_names) do
                 ref_type = ref_columns[name]
                 if ref_type != nil then
-                    cells = cells .. "<td>" .. render_reference_value(ref_type, row[name]) .. "</td>"
+                    cells = cells .. "<td>" .. render_reference_value(db_path, ref_type, row[name]) .. "</td>"
                 else
                     cells = cells .. "<td>" .. display_value(row[name]) .. "</td>"
                 end
