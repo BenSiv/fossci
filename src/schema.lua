@@ -141,6 +141,17 @@ end
 -- sync run (a real, confirmed-live duplication bug this fixed: entity
 -- tables had no external-id concept at all, so every run re-inserted
 -- every source row from scratch).
+--
+-- "name" is the same idea for a real display label: an external source
+-- like Benchling already assigns every record a genuine name (e.g. a
+-- container literally named "50L stainless steel bioreactor"), distinct
+-- from any of its own schema fields. Confirmed live: an importer was
+-- already fetching this value to use as a natural key for dedup
+-- matching, then discarding it -- never persisting it anywhere. A
+-- schema-author's own {display = true} field (schema.lua's
+-- entity_field.display column) is a reasonable per-type fallback for
+-- data that has no such external source, but shouldn't be the first
+-- choice when a real name already exists.
 BUILTIN_COLUMNS = {
     {name = "created_by", sql_type = "TEXT"},
     {name = "created_at", sql_type = "TEXT DEFAULT (datetime('now', 'localtime'))"},
@@ -148,6 +159,7 @@ BUILTIN_COLUMNS = {
     {name = "updated_at", sql_type = "TEXT DEFAULT (datetime('now', 'localtime'))"},
     {name = "last_event_id", sql_type = "INTEGER"},
     {name = "external_id", sql_type = "TEXT"},
+    {name = "name", sql_type = "TEXT"},
 }
 
 -- Creates the projected table if it doesn't exist, or adds any columns

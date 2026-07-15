@@ -512,20 +512,26 @@ end
 -- render_browse below. "fossci/detail..." (no leading slash) is
 -- intentional -- see render_browse's own identical link for why
 -- (relative to this page's own <base>, which lacks a trailing slash).
--- fossci's entity tables carry no built-in "name" column at all --
--- schema authors mark ONE field {display = true} in schemas/*.lua when
--- an id alone isn't a useful label (see schema.lua's entity_field.display
--- column). Returns nil (caller falls back to "#id") when the referenced
--- type has no field marked, or when that field is empty for this row --
--- a heuristic like "first text field" was considered and rejected: a
--- real schema's first text-type field is often not the one a human
--- would pick (e.g. plant's is "genetic_group", not species/variety).
--- A bare number (e.g. "343" for an experiment) reads as ambiguous --
--- could be mistaken for the id itself -- while a text value (a lab
--- name, a compound name) is already self-explanatory on its own. Only
--- number-typed display fields get the entity type name prefixed, e.g.
--- "experiment 343" rather than a bare "343"; text/select fields are
--- left exactly as declared.
+-- Two sources for a human-readable label, tried in priority order:
+--   1. The builtin "name" column (schema.lua's BUILTIN_COLUMNS) -- a
+--      real name assigned by an external source like Benchling (e.g. a
+--      container literally named "50L stainless steel bioreactor").
+--      Confirmed live: an importer already fetched this value but only
+--      used it transiently for dedup matching, never persisting it --
+--      fixed separately, but this is the whole reason the column exists.
+--   2. A schema author's own {display = true} field (entity_field.display),
+--      for entity types with no such external source at all. A
+--      heuristic like "first text field" was considered and rejected: a
+--      real schema's first text-type field is often not the one a human
+--      would pick (e.g. plant's is "genetic_group", not species/variety).
+-- Returns nil (caller falls back to "#id") when neither source has a
+-- non-empty value for this row.
+--
+-- A bare number from source 2 (e.g. "343" for an experiment) reads as
+-- ambiguous -- could be mistaken for the id itself -- while a text value
+-- is already self-explanatory. Only number-typed display fields get the
+-- entity type name prefixed ("experiment 343"); text/select fields, and
+-- anything from the builtin name column, are used exactly as they are.
 function format_display_label(entity_type, field, raw_value)
     if field.type == "number" then
         return entity_type .. " " .. tostring(raw_value)
@@ -534,6 +540,13 @@ function format_display_label(entity_type, field, raw_value)
 end
 
 function entity_display_label(db_path, entity_type, entity_id)
+    rows = db.query(db_path, string.format(
+        "SELECT name FROM %s WHERE id = %s;", entity_type, db.quote(entity_id)
+    ))
+    if rows != nil and rows[1] != nil and rows[1].name != nil and tostring(rows[1].name) != "" then
+        return tostring(rows[1].name)
+    end
+
     fields = schema.fields(db_path, entity_type)
     if fields == nil then
         return nil
@@ -558,10 +571,14 @@ function entity_display_label(db_path, entity_type, entity_id)
     return format_display_label(entity_type, display_field, rows[1].label)
 end
 
--- Same display-field convention as entity_display_label, but for a row
--- this page already has fully loaded -- no second query needed, just a
--- schema.fields() lookup to find which column (if any) is marked.
+-- Same two-source priority as entity_display_label, but for a row this
+-- page already has fully loaded -- no second query needed for either
+-- source, just reading row.name and (if empty) a schema.fields() lookup.
 function own_row_label(db_path, entity_type, row)
+    if row.name != nil and tostring(row.name) != "" then
+        return tostring(row.name)
+    end
+
     fields = schema.fields(db_path, entity_type)
     if fields == nil then
         return nil
