@@ -606,6 +606,8 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
             border-radius: 8px;
             font-weight: 600;
             font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             border: none;
             display: inline-flex;
             align-items: center;
@@ -616,6 +618,8 @@ function html.render_browse(entity_type, layout, rows, page, page_size, total)
             color: #ffffff;
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
         }
+        .btn-primary:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3); filter: brightness(1.05); }
+        .btn-primary:active { transform: scale(0.98); }
         .fossci-table-wrapper {
             overflow-x: auto;
             border: 1px solid var(--fossci-border, #e2e8f0);
@@ -1170,10 +1174,13 @@ function html.render_sql(sql_text, column_names, rows, err, ref_columns)
             font-weight: 600;
             font-size: 0.9rem;
             cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             border: none;
             background: linear-gradient(135deg, var(--fossci-accent, #4f46e5), var(--fossci-accent-2, #6366f1));
             color: #ffffff;
         }
+        .btn-primary:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3); filter: brightness(1.05); }
+        .btn-primary:active { transform: scale(0.98); }
         .fossci-sql-error {
             margin-top: 20px;
             padding: 14px 18px;
@@ -1208,12 +1215,15 @@ function html.render_sql(sql_text, column_names, rows, err, ref_columns)
             font-weight: 600;
             font-size: 0.85rem;
             cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             border: 1px solid var(--fossci-border, #e2e8f0);
             background: var(--fossci-bg-2, #f1f5f9);
             color: var(--fossci-text, #334155);
             white-space: nowrap;
         }
-        .btn-secondary:disabled { opacity: 0.6; cursor: default; }
+        .btn-secondary:hover { background: var(--fossci-bg, #f8fafc); color: var(--fossci-heading, #0f172a); }
+        .btn-secondary:active { transform: scale(0.98); }
+        .btn-secondary:disabled { opacity: 0.6; cursor: default; transform: none; }
         .fossci-nlsql-status { font-size: 0.8rem; color: var(--fossci-muted, #64748b); white-space: nowrap; }
     </style>
     <div class="fossci-container">
