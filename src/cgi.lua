@@ -165,6 +165,59 @@ function handle_autocomplete(db_path, params)
     return print_response("200 OK", "application/json", json.encode(result))
 end
 
+-- Backs the entity-reference hover preview (render_reference_value's
+-- data-fossci-popover-src, html.lua) -- a few key fields of the
+-- referenced row, fetched lazily on hover rather than shown by default
+-- on every reference column.
+function handle_preview(db_path, params)
+    entity_type = params.type
+    entity_id = tonumber(params.entity_id)
+    if entity_type == nil or entity_type == "" or entity_id == nil then
+        return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type or entity_id"}))
+    end
+    if not db.table_exists(db_path, entity_type) then
+        return print_response("200 OK", "application/json", json.encode({html = "Unknown entity type."}))
+    end
+
+    rows = db.query(db_path, "SELECT * FROM " .. entity_type .. " WHERE id = " .. db.quote(entity_id) .. ";")
+    if rows == nil or rows[1] == nil then
+        return print_response("200 OK", "application/json", json.encode({html = "Not found."}))
+    end
+    row = rows[1]
+
+    title = own_row_label(db_path, entity_type, row)
+    if title == nil then
+        title = entity_type .. " #" .. tostring(entity_id)
+    end
+
+    entity_layout, layout_err = schema.layout(db_path, entity_type)
+    fields = {}
+    if entity_layout != nil then
+        fields = entity_layout.fields
+    end
+
+    field_lines = ""
+    shown = 0
+    for _, field in ipairs(fields) do
+        if shown < 5 then
+            value = row[field.name]
+            if value != nil and tostring(value) != "" then
+                field_lines = field_lines .. "<div><strong>" .. html_escape(field.label) .. ":</strong> " ..
+                    html_escape(tostring(value)) .. "</div>"
+                shown = shown + 1
+            end
+        end
+    end
+    if field_lines == "" then
+        field_lines = "<div style=\"color:var(--fossci-muted,#94a3b8);\">No fields to show.</div>"
+    end
+
+    preview_html = "<strong>" .. html_escape(title) .. "</strong>" ..
+        "<hr style=\"margin:6px 0;border:none;border-top:1px solid var(--fossci-border,#e2e8f0);\">" ..
+        field_lines
+    return print_response("200 OK", "application/json", json.encode({html = preview_html}))
+end
+
 function cgi.handle_request()
     path_info = default_value(os.getenv("PATH_INFO"), "/register")
     query_string = default_value(os.getenv("QUERY_STRING"), "")
@@ -240,7 +293,7 @@ function cgi.handle_request()
         total = entity.count(db_path, entity_type)
         offset = (page - 1) * BROWSE_PAGE_SIZE
         rows = entity.list(db_path, entity_type, BROWSE_PAGE_SIZE, offset)
-        body = html.render_browse(db_path, entity_type, layout, rows, page, BROWSE_PAGE_SIZE, total)
+        body = html.render_browse(db_path, entity_type, layout, rows, page, BROWSE_PAGE_SIZE, total, default_value(os.getenv("FOSSIL_NONCE"), ""))
         return print_response("200 OK", "text/html", body)
     end
 
@@ -285,7 +338,7 @@ function cgi.handle_request()
         end
 
         history = ledger.history(db_path, entity_id)
-        body = html.render_detail(db_path, entity_type, layout, row, history)
+        body = html.render_detail(db_path, entity_type, layout, row, history, default_value(os.getenv("FOSSIL_NONCE"), ""))
         return print_response("200 OK", "text/html", body)
     end
 
@@ -354,7 +407,7 @@ function cgi.handle_request()
                 ref_columns["id"] = from_table
             end
         end
-        body = html.render_sql(db_path, sql_text, column_names, rows, sql_err, ref_columns)
+        body = html.render_sql(db_path, sql_text, column_names, rows, sql_err, ref_columns, default_value(os.getenv("FOSSIL_NONCE"), ""))
         return print_response("200 OK", "text/html", body)
     end
 
@@ -401,6 +454,10 @@ function cgi.handle_request()
 
     if path_info == "/api/autocomplete" then
         return handle_autocomplete(db_path, params)
+    end
+
+    if path_info == "/api/preview" then
+        return handle_preview(db_path, params)
     end
 
     if path_info == "/api/validate" and method == "POST" then

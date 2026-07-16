@@ -16,6 +16,92 @@ function html_escape(s)
     return s
 end
 
+-- Generic hover-popover component, for "reveal detail on hover instead
+-- of cramming it into the default view" -- the design principle behind
+-- moving Data-index row counts and SQL-result entity previews off the
+-- page by default (see render_index/render_sql). Reused as shared
+-- blocks rather than duplicated per render_* function, matching how a
+-- few other repeated style rules (.fossci-container, .btn-primary,
+-- etc.) already work in this file -- each render_* function embeds its
+-- own self-contained <style>/<script>, there is no separate
+-- shared-asset loading mechanism in fossci today.
+--
+-- Two trigger shapes, same visual popover, split into CSS-only vs
+-- CSS+JS so a page with only the cheap precomputed case (no JS/nonce
+-- needed at all) doesn't have to carry the fetch machinery:
+--   - A trigger with a `.fossci-popover` child already containing real
+--     markup (no `data-fossci-popover-src`) just reveals it on hover --
+--     pure CSS, for callers that can cheaply precompute the content
+--     server-side. Only needs popover_css().
+--   - `data-fossci-popover-src="URL"` -- lazy-fetched (debounced,
+--     cached per URL for the page's lifetime) JSON `{html: "..."}`
+--     response, shown on hover. For cases where precomputing/embedding
+--     every possible preview server-side would be wasteful (e.g. one
+--     row per SQL result). Needs both popover_css() and popover_js().
+function html.popover_css()
+    return """
+<style>
+.fossci-popover-trigger { position: relative; cursor: help; }
+.fossci-popover-trigger[data-fossci-popover-src] { cursor: pointer; }
+.fossci-popover {
+    position: absolute; z-index: 100; left: 0; top: 100%; margin-top: 6px;
+    min-width: 180px; max-width: 320px; padding: 10px 12px;
+    background: var(--fossci-bg, #ffffff); border: 1px solid var(--fossci-border, #e2e8f0);
+    border-radius: var(--fossci-radius-sm, 8px); box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    font-size: 0.85rem; font-weight: 400; color: var(--fossci-text, #334155);
+    text-align: left; white-space: normal;
+    opacity: 0; visibility: hidden; transform: translateY(-4px);
+    transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1));
+    pointer-events: none;
+}
+.fossci-popover-trigger:hover .fossci-popover,
+.fossci-popover-trigger:focus .fossci-popover { opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto; }
+.fossci-popover-loading, .fossci-popover-error { color: var(--fossci-muted, #94a3b8); font-style: italic; }
+</style>
+"""
+end
+
+-- `nonce` must be Fossil's own per-request CSP nonce (see html.render's
+-- own comment below) since this emits an inline <script>.
+function html.popover_js(nonce)
+    if nonce == nil then
+        nonce = ""
+    end
+    return string.format("""
+<script nonce="%s">
+(function(){
+    var cache = {};
+    function loadInto(trigger, pop){
+        var src = trigger.getAttribute('data-fossci-popover-src');
+        if(cache[src] != null){ pop.innerHTML = cache[src]; return; }
+        pop.innerHTML = '<span class="fossci-popover-loading">Loading...</span>';
+        fetch(src).then(function(resp){ return resp.json(); }).then(function(data){
+            var html = (data && data.html) ? data.html : 'No preview available.';
+            cache[src] = html;
+            pop.innerHTML = html;
+        }).catch(function(){
+            pop.innerHTML = '<span class="fossci-popover-error">Preview failed to load.</span>';
+        });
+    }
+    document.querySelectorAll('.fossci-popover-trigger[data-fossci-popover-src]').forEach(function(trigger){
+        var pop = trigger.querySelector('.fossci-popover');
+        if(!pop) return;
+        var timer = null;
+        var loaded = false;
+        trigger.addEventListener('mouseenter', function(){
+            timer = setTimeout(function(){
+                if(!loaded){ loaded = true; loadInto(trigger, pop); }
+            }, 200);
+        });
+        trigger.addEventListener('mouseleave', function(){
+            if(timer) clearTimeout(timer);
+        });
+    });
+})();
+</script>
+""", nonce)
+end
+
 -- `nonce` must be Fossil's own per-request CSP nonce (the FOSSIL_NONCE
 -- CGI env var Fossil already injects, see doc/architecture.md) --
 -- Fossil's page wrapper sets a strict `script-src 'self' 'nonce-...'`
@@ -31,7 +117,7 @@ function html.render(entity_type, layout_json, nonce)
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1200px;
@@ -62,7 +148,7 @@ function html.render(entity_type, layout_json, nonce)
             overflow-x: auto;
             margin-bottom: 24px;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
             box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.02);
             background: var(--fossci-bg, #f8fafc);
         }
@@ -101,7 +187,7 @@ function html.render(entity_type, layout_json, nonce)
             width: 100%%;
             padding: 9px 12px;
             border: 1px solid var(--fossci-border-2, #cbd5e1);
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             font-size: 0.9rem;
             background: #ffffff;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -133,7 +219,7 @@ function html.render(entity_type, layout_json, nonce)
             right: 0;
             background: #ffffff;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             max-height: 220px;
             overflow-y: auto;
             z-index: 1000;
@@ -157,7 +243,7 @@ function html.render(entity_type, layout_json, nonce)
         }
         .btn {
             padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             font-weight: 600;
             font-size: 0.9rem;
             cursor: pointer;
@@ -193,7 +279,7 @@ function html.render(entity_type, layout_json, nonce)
         .status-msg {
             margin-top: 24px;
             padding: 14px 20px;
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             font-size: 0.95rem;
             display: none;
             font-weight: 500;
@@ -606,8 +692,16 @@ function render_reference_value(db_path, ref_entity_type, value)
     if label != nil then
         link_text = html_escape(label)
     end
+    -- Hover reveals a preview of the referenced row (fetched lazily via
+    -- /api/preview, see cgi.lua) rather than making every reference
+    -- column a guessing game of "click through and come back" -- the
+    -- same popover mechanism (html.popover_css()/popover_js()) used for
+    -- Data-index row counts, here in its lazy-fetch form since
+    -- precomputing every row's preview server-side would be wasteful.
+    preview_src = "fossci/api/preview?type=" .. escaped_type .. "&entity_id=" .. escaped_id
     return "<a href=\"fossci/detail?type=" .. escaped_type .. "&entity_id=" .. escaped_id ..
-        "\" class=\"fossci-entity-ref\">" .. link_text .. "</a>"
+        "\" class=\"fossci-entity-ref fossci-popover-trigger\" data-fossci-popover-src=\"" .. preview_src ..
+        "\" tabindex=\"0\">" .. link_text .. "<span class=\"fossci-popover\"></span></a>"
 end
 
 -- Picks the right renderer for a field's value, given its schema.layout()
@@ -623,7 +717,10 @@ end
 -- each one's detail page. Pure server-rendered HTML -- no JS, so none
 -- of the CSP/nonce concerns the registration table's client-side JS
 -- has (see html.render's header comment for why that one needs one).
-function html.render_browse(db_path, entity_type, layout, rows, page, page_size, total)
+function html.render_browse(db_path, entity_type, layout, rows, page, page_size, total, nonce)
+    if nonce == nil then
+        nonce = ""
+    end
     escaped_type = html_escape(entity_type)
 
     header_cells = "<th>ID</th>"
@@ -679,7 +776,7 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1200px;
@@ -699,7 +796,7 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
         .fossci-header a:hover { text-decoration: underline; }
         .btn {
             padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             font-weight: 600;
             font-size: 0.9rem;
             cursor: pointer;
@@ -719,7 +816,7 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
         .fossci-table-wrapper {
             overflow-x: auto;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
             background: var(--fossci-bg, #f8fafc);
         }
         #browse-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 600px; }
@@ -746,7 +843,7 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
             color: var(--fossci-muted, #64748b);
             background: var(--fossci-bg, #f8fafc);
             border: 1px dashed var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
         }
         .fossci-pager {
             display: flex;
@@ -763,7 +860,7 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
         .fossci-entity-ref::after { content: " \2197"; font-size: 0.85em; }
         .fossci-entity-ref:hover { text-decoration: underline; }
     </style>
-
+    %s
     <div class="fossci-container">
         <div class="fossci-header">
             <div>
@@ -776,12 +873,16 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
         %s
     </div>
 </div>
-""", escaped_type, escaped_type, total, escaped_type, table_or_empty, pager)
+%s
+""", html.popover_css(), escaped_type, escaped_type, total, escaped_type, table_or_empty, pager, html.popover_js(nonce))
 end
 
 -- Detail view: current field values plus the full ledger history for
 -- one entity. Also pure server-rendered HTML, no JS.
-function html.render_detail(db_path, entity_type, layout, row, history)
+function html.render_detail(db_path, entity_type, layout, row, history, nonce)
+    if nonce == nil then
+        nonce = ""
+    end
     escaped_type = html_escape(entity_type)
     id_str = tostring(row.id)
     own_label = own_row_label(db_path, entity_type, row)
@@ -817,7 +918,7 @@ function html.render_detail(db_path, entity_type, layout, row, history)
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1200px;
@@ -835,12 +936,12 @@ function html.render_detail(db_path, entity_type, layout, row, history)
             padding: 20px;
             background: var(--fossci-bg, #f8fafc);
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
         }
         .detail-row { display: flex; flex-direction: column; gap: 4px; }
         .detail-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fossci-muted, #64748b); font-weight: 600; }
         .detail-value { font-size: 0.95rem; color: var(--fossci-heading, #0f172a); word-break: break-word; }
-        .fossci-table-wrapper { overflow-x: auto; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 12px; background: var(--fossci-bg, #f8fafc); }
+        .fossci-table-wrapper { overflow-x: auto; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-md, 12px); background: var(--fossci-bg, #f8fafc); }
         #history-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 700px; }
         #history-table th, #history-table td {
             padding: 12px 16px;
@@ -864,7 +965,7 @@ function html.render_detail(db_path, entity_type, layout, row, history)
         .fossci-entity-ref::after { content: " \2197"; font-size: 0.85em; }
         .fossci-entity-ref:hover { text-decoration: underline; }
     </style>
-
+    %s
     <div class="fossci-container">
         <div class="fossci-header">
             <h2>%s %s</h2>
@@ -884,7 +985,8 @@ function html.render_detail(db_path, entity_type, layout, row, history)
         </div>
     </div>
 </div>
-""", escaped_type, title_id_part, escaped_type, title_id_part, escaped_type, fields_html, history_rows)
+%s
+""", escaped_type, title_id_part, html.popover_css(), escaped_type, title_id_part, escaped_type, fields_html, history_rows, html.popover_js(nonce))
 end
 
 -- Generic view: any approved custom SQL view rendered as a table.
@@ -936,7 +1038,7 @@ function html.render_view(view_def, rows, param_value)
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1200px;
@@ -945,7 +1047,7 @@ function html.render_view(view_def, rows, param_value)
         .fossci-header { margin-bottom: 24px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
-        .fossci-table-wrapper { overflow-x: auto; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 12px; background: var(--fossci-bg, #f8fafc); }
+        .fossci-table-wrapper { overflow-x: auto; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-md, 12px); background: var(--fossci-bg, #f8fafc); }
         #view-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 600px; }
         #view-table th, #view-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--fossci-border, #e2e8f0); font-size: 0.9rem; }
         #view-table th {
@@ -963,7 +1065,7 @@ function html.render_view(view_def, rows, param_value)
             color: var(--fossci-muted, #64748b);
             background: var(--fossci-bg, #f8fafc);
             border: 1px dashed var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
         }
     </style>
     <div class="fossci-container">
@@ -985,12 +1087,21 @@ function html.render_index(entity_types, show_sql_widget)
     items = ""
     for _, row in ipairs(entity_types) do
         escaped_name = html_escape(row.name)
-        count_badge = ""
+        -- Row count used to be an always-visible inline badge; moved to
+        -- a hover popover (html.popover_css()) so the default view only
+        -- shows what's needed to decide "do I click into this."
+        trigger_class = ""
+        count_popover = ""
         if row.count != nil then
-            count_badge = "<span class=\"fossci-index-count\">" .. tostring(row.count) .. "</span>"
+            count_label = tostring(row.count) .. " rows"
+            if row.count == 1 then
+                count_label = "1 row"
+            end
+            trigger_class = "fossci-popover-trigger"
+            count_popover = "<span class=\"fossci-popover\">" .. count_label .. "</span>"
         end
-        items = items .. "<li><a href=\"fossci/browse?type=" .. escaped_name .. "\">" .. escaped_name ..
-            "</a>" .. count_badge .. "</li>"
+        items = items .. "<li><a href=\"fossci/browse?type=" .. escaped_name .. "\" class=\"" .. trigger_class .. "\" tabindex=\"0\">" .. escaped_name ..
+            count_popover .. "</a></li>"
     end
 
     list_or_empty = "<ul class=\"fossci-index-list\">" .. items .. "</ul>"
@@ -1011,7 +1122,7 @@ function html.render_index(entity_types, show_sql_widget)
     if show_sql_widget == true then
         sql_widget = """
     <div class="fossci-container">
-        <iframe src="fossci/sql" style="width:100%;height:520px;border:0;border-radius:12px;"></iframe>
+        <iframe src="fossci/sql" style="width:100%;height:520px;border:0;border-radius:var(--fossci-radius-md, 12px);"></iframe>
     </div>
 """
     end
@@ -1024,7 +1135,7 @@ function html.render_index(entity_types, show_sql_widget)
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 800px;
@@ -1034,29 +1145,21 @@ function html.render_index(entity_types, show_sql_widget)
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
         .fossci-index-list { list-style: none !important; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-        .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; display: flex; align-items: center; }
+        .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-item, 10px); display: flex; align-items: center; transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1)); }
+        .fossci-index-list li:hover { border-color: var(--fossci-accent, #4f46e5); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
         .fossci-index-list li::marker { content: ""; }
         .fossci-index-list a { flex: 1; display: block; padding: 12px 16px; color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; text-transform: capitalize; }
-        .fossci-index-list a:hover { background: var(--fossci-bg-2, #f1f5f9); border-radius: 10px 0 0 10px; }
-        .fossci-index-count {
-            margin-right: 14px;
-            padding: 2px 9px;
-            border-radius: 999px;
-            background: var(--fossci-bg-2, #f1f5f9);
-            color: var(--fossci-th-text, #475569);
-            font-size: 0.78rem;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-        }
+        .fossci-index-list a:hover { background: var(--fossci-bg-2, #f1f5f9); border-radius: var(--fossci-radius-item, 10px) 0 0 var(--fossci-radius-item, 10px); }
         .fossci-empty {
             padding: 32px;
             text-align: center;
             color: var(--fossci-muted, #64748b);
             background: var(--fossci-bg, #f8fafc);
             border: 1px dashed var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
         }
     </style>
+    %s
     <div class="fossci-container">
         <div class="fossci-header">
             <h2>Entity types</h2>
@@ -1066,7 +1169,7 @@ function html.render_index(entity_types, show_sql_widget)
     </div>
 %s
 </div>
-""", #entity_types, list_or_empty, sql_widget)
+""", html.popover_css(), #entity_types, list_or_empty, sql_widget)
 end
 
 -- Every entry template found (whether it loaded cleanly or not), each
@@ -1107,7 +1210,7 @@ function html.render_templates_list(entries)
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 800px;
@@ -1117,19 +1220,19 @@ function html.render_templates_list(entries)
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
         .fossci-index-list { list-style: none !important; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-        .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 10px; padding: 14px 16px; }
+        .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-item, 10px); padding: 14px 16px; }
         .fossci-index-list li::marker { content: ""; }
         .fossci-index-list a { font-weight: 700; color: var(--fossci-accent, #4f46e5); text-decoration: none; }
         .fossci-index-list a:hover { text-decoration: underline; }
         .fossci-index-list p { margin: 6px 0 0 0; color: var(--fossci-muted, #64748b); font-size: 0.88rem; }
-        .fossci-template-error { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 16px; }
+        .fossci-template-error { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--fossci-radius-item, 10px); padding: 14px 16px; }
         .fossci-empty {
             padding: 32px;
             text-align: center;
             color: var(--fossci-muted, #64748b);
             background: var(--fossci-bg, #f8fafc);
             border: 1px dashed var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
         }
     </style>
     <div class="fossci-container">
@@ -1170,7 +1273,7 @@ function html.render_template(def, rendered_markdown, nonce)
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 900px;
@@ -1189,7 +1292,7 @@ function html.render_template(def, rendered_markdown, nonce)
             font-size: 0.88rem;
             padding: 16px;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
             background: var(--fossci-bg, #f8fafc);
             color: var(--fossci-input-text, #1e293b);
         }
@@ -1197,7 +1300,7 @@ function html.render_template(def, rendered_markdown, nonce)
             margin-top: 16px;
             padding: 16px;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
             background: var(--fossci-bg, #f8fafc);
             display: flex;
             flex-wrap: wrap;
@@ -1209,20 +1312,22 @@ function html.render_template(def, rendered_markdown, nonce)
             flex: 1 1 260px;
             padding: 8px 10px;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             font-size: 0.9rem;
             color: var(--fossci-input-text, #1e293b);
         }
         .fossci-create-block button {
             padding: 8px 14px;
             border: none;
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             background: var(--fossci-accent, #4f46e5);
             color: #fff;
             font-weight: 600;
             cursor: pointer;
+            transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1));
         }
-        .fossci-create-block button:hover { opacity: 0.9; }
+        .fossci-create-block button:hover { opacity: 0.9; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .fossci-create-block button:active { transform: scale(0.96); }
         .fossci-create-status { flex-basis: 100%%; font-size: 0.85rem; color: var(--fossci-muted, #64748b); }
         .fossci-create-status.error { color: #991b1b; }
     </style>
@@ -1312,7 +1417,7 @@ function html.render_wiki_new(err, prefill_name, prefill_content, nonce)
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 900px;
@@ -1330,7 +1435,7 @@ function html.render_wiki_new(err, prefill_name, prefill_content, nonce)
             box-sizing: border-box;
             padding: 10px 12px;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             font-size: 0.95rem;
             color: var(--fossci-input-text, #1e293b);
         }
@@ -1342,7 +1447,7 @@ function html.render_wiki_new(err, prefill_name, prefill_content, nonce)
             font-size: 0.88rem;
             padding: 16px;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 12px;
+            border-radius: var(--fossci-radius-md, 12px);
             background: var(--fossci-bg, #f8fafc);
             color: var(--fossci-input-text, #1e293b);
         }
@@ -1351,13 +1456,15 @@ function html.render_wiki_new(err, prefill_name, prefill_content, nonce)
         #fossci-wiki-new-submit {
             padding: 10px 18px;
             border: none;
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             background: var(--fossci-accent, #4f46e5);
             color: #fff;
             font-weight: 600;
             cursor: pointer;
+            transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1));
         }
-        #fossci-wiki-new-submit:hover { opacity: 0.9; }
+        #fossci-wiki-new-submit:hover { opacity: 0.9; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        #fossci-wiki-new-submit:active { transform: scale(0.96); }
     </style>
     <div class="fossci-container">
         <div class="fossci-header">
@@ -1421,9 +1528,12 @@ end
 -- the query is a normal, bookmarkable/shareable URL. `column_names`/
 -- `rows` are nil until a query has been run; `err` is set instead if
 -- it failed (not select-only, invalid sql, etc.).
-function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns)
+function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns, nonce)
     if ref_columns == nil then
         ref_columns = {}
+    end
+    if nonce == nil then
+        nonce = ""
     end
     sql_text_or_empty = sql_text
     if sql_text_or_empty == nil then
@@ -1474,7 +1584,7 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
             color: var(--fossci-text, #334155);
             background: #ffffff;
             padding: 28px;
-            border-radius: 16px;
+            border-radius: var(--fossci-radius-lg, 16px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             margin: 20px auto;
             max-width: 1100px;
@@ -1491,14 +1601,14 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
             font-size: 0.9rem;
             padding: 14px;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 10px;
+            border-radius: var(--fossci-radius-item, 10px);
             background: var(--fossci-bg, #f8fafc);
             color: var(--fossci-input-text, #1e293b);
             margin-bottom: 12px;
         }
         .btn-primary {
             padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             font-weight: 600;
             font-size: 0.9rem;
             cursor: pointer;
@@ -1512,18 +1622,18 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
         .fossci-sql-error {
             margin-top: 20px;
             padding: 14px 18px;
-            border-radius: 10px;
+            border-radius: var(--fossci-radius-item, 10px);
             background: #fef2f2;
             border: 1px solid #fecaca;
             color: #991b1b;
         }
         .fossci-sql-count { color: var(--fossci-muted, #64748b); font-size: 0.85rem; margin-top: 8px; }
-        .fossci-table-wrapper { overflow-x: auto; margin-top: 20px; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: 12px; background: var(--fossci-bg, #f8fafc); }
+        .fossci-table-wrapper { overflow-x: auto; margin-top: 20px; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-md, 12px); background: var(--fossci-bg, #f8fafc); }
         #sql-table { width: 100%%; border-collapse: separate; border-spacing: 0; min-width: 600px; }
         #sql-table th, #sql-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--fossci-border, #e2e8f0); font-size: 0.85rem; }
         #sql-table th { background: var(--fossci-bg-2, #f1f5f9); font-weight: 600; font-size: 0.75rem; color: var(--fossci-th-text, #475569); text-transform: uppercase; letter-spacing: 0.06em; }
         #sql-table td { background: #ffffff; }
-        .fossci-empty { margin-top: 20px; padding: 24px; text-align: center; color: var(--fossci-muted, #64748b); background: var(--fossci-bg, #f8fafc); border: 1px dashed var(--fossci-border, #e2e8f0); border-radius: 12px; }
+        .fossci-empty { margin-top: 20px; padding: 24px; text-align: center; color: var(--fossci-muted, #64748b); background: var(--fossci-bg, #f8fafc); border: 1px dashed var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-md, 12px); }
         .fossci-entity-ref { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
         .fossci-entity-ref::after { content: " \2197"; font-size: 0.85em; }
         .fossci-entity-ref:hover { text-decoration: underline; }
@@ -1532,14 +1642,14 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
             flex: 1;
             padding: 10px 14px;
             border: 1px solid var(--fossci-border, #e2e8f0);
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             background: var(--fossci-bg, #f8fafc);
             color: var(--fossci-input-text, #1e293b);
             font-size: 0.9rem;
         }
         .btn-secondary {
             padding: 10px 16px;
-            border-radius: 8px;
+            border-radius: var(--fossci-radius-sm, 8px);
             font-weight: 600;
             font-size: 0.85rem;
             cursor: pointer;
@@ -1554,6 +1664,7 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
         .btn-secondary:disabled { opacity: 0.6; cursor: default; transform: none; }
         .fossci-nlsql-status { font-size: 0.8rem; color: var(--fossci-muted, #64748b); white-space: nowrap; }
     </style>
+    %s
     <div class="fossci-container">
         <div class="fossci-header">
             <h2>Query</h2>
@@ -1571,7 +1682,8 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
         %s
     </div>
 </div>
-""", escaped_sql, result_html)
+%s
+""", html.popover_css(), escaped_sql, result_html, html.popover_js(nonce))
 end
 
 return html
