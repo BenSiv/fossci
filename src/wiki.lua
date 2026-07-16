@@ -84,7 +84,7 @@ function wiki.create_page(repo_fossil, name, content, mimetype, author)
     if exit_code == 0 then
         return true, output
     end
-    return false, output
+    return false, output .. " [DEBUG cmd: " .. cmd .. "]"
 end
 
 return wiki
