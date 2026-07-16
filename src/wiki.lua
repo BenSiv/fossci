@@ -26,7 +26,7 @@ function wiki.fossil_bin()
 end
 
 function wiki.page_exists(repo_fossil, name)
-    cmd = wiki.fossil_bin() .. " wiki export " .. wiki.shell_quote(name) ..
+    cmd = wiki.fossil_bin() .. " --nocgi wiki export " .. wiki.shell_quote(name) ..
         " - -R " .. wiki.shell_quote(repo_fossil) .. " >/dev/null 2>&1"
     return os.execute(cmd) == 0
 end
@@ -64,7 +64,16 @@ function wiki.create_page(repo_fossil, name, content, mimetype, author)
     io.write(fh, content)
     io.close(fh)
 
-    cmd = wiki.fossil_bin() .. " wiki create " .. wiki.shell_quote(name) ..
+    -- --nocgi is required, not cosmetic: Fossil's own main() switches into
+    -- CGI-request handling the moment it sees GATEWAY_INTERFACE set (main.c),
+    -- and that var (along with REQUEST_METHOD/PATH_INFO/QUERY_STRING) is
+    -- always present in THIS process's own env -- Fossil's /ext dispatch set
+    -- them via fossil_setenv() to invoke fossci in the first place, and a
+    -- plain os.execute()/system() child inherits them. Without --nocgi, this
+    -- shells out to what fossil thinks is ANOTHER cgi request, not a CLI
+    -- command, and it fails with a confusing "no such file: wiki" (confirmed
+    -- by reproducing locally with GATEWAY_INTERFACE set vs unset).
+    cmd = wiki.fossil_bin() .. " --nocgi wiki create " .. wiki.shell_quote(name) ..
         " " .. wiki.shell_quote(content_path) ..
         " -R " .. wiki.shell_quote(repo_fossil) ..
         " -M " .. wiki.shell_quote(mimetype) ..
@@ -84,7 +93,7 @@ function wiki.create_page(repo_fossil, name, content, mimetype, author)
     if exit_code == 0 then
         return true, output
     end
-    return false, output .. " [DEBUG cmd: " .. cmd .. "]"
+    return false, output
 end
 
 return wiki
