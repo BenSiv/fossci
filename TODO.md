@@ -98,21 +98,46 @@
       factored into `schema.layout()` so these reuse it as a native Luam
       table instead of round-tripping through JSON
 - [ ] Schema + extension admin UI
-- [ ] **Security finding, not yet fixed** (found while adding browse/
-      detail, pre-existing, broader than this feature): `entity_type`
+- [x] **Security finding, fixed 2026-07-17** (found while adding browse/
+      detail, pre-existing, broader than that feature): `entity_type`
       flows unescaped into raw SQL as a table-name (`"SELECT * FROM "
       .. entity_type`, throughout `entity.lua`/`db.lua`) and into a file
       path for schema lookup (`schema.lua`'s `schemas_dir .. "/" ..
       name .. ".lua"`) wherever it comes from a request parameter
       (`params.type`) -- a live SQL-injection and path-traversal surface
       if `entity_type` is ever taken from anywhere less trusted than
-      "must exactly match an already-registered schema name". Today's
-      code paths happen to be safe in practice only because every call
-      site checks the name resolves via `schema.layout`/`schema.fields`
-      first, which is incidental, not a deliberate guard. Needs a
-      dedicated pass: a single allowlist/charset check (e.g. `^[a-z_]
-      [a-z0-9_]*$` matched against `schema.list()`) applied once,
-      centrally, everywhere `entity_type` enters from external input.
+      "must exactly match an already-registered schema name". Prior
+      code paths only happened to be safe because every call site
+      checked the name resolves via `schema.layout`/`schema.fields`
+      first, which was incidental, not a deliberate guard. Fixed with
+      exactly the dedicated pass this note called for: a new
+      `schema.valid_name_syntax(name)` (charset check, `^[a-z_]
+      [a-z0-9_]*$`, matching how every real schema names itself),
+      applied once, at each of the 8 places in `cgi.lua` where a
+      request parameter (`params.type`/`type` for the autocomplete
+      endpoint's `ref_type`) becomes an `entity_type` -- `/register`,
+      `/browse`, `/detail`, `/api/validate`, `/api/submit`,
+      `/api/update`, `/api/preview`, `/api/autocomplete` -- rejecting
+      with 400 before the value can reach any raw SQL or path-building
+      call. Deliberately a pure syntax check rather than one that also
+      queries `schema.list()`: the existing `schema.layout`/
+      `schema.is_registered`/`db.table_exists` calls already downstream
+      of each of these handlers cover "is this a real registered type,"
+      and duplicating that here would just be a second DB round-trip
+      for the same fact -- the actual gap being closed is purely
+      "can this string possibly be a valid identifier at all."
+
+      Verified: 2 new `schema.lua` unit tests (valid real-schema-name
+      shapes accepted; SQL-injection/path-traversal/case/leading-digit/
+      empty/nil/non-string shapes rejected) plus 3 new real CGI-mode
+      bats tests -- `/browse` and `/api/preview` both given a
+      stacked-SQL-statement payload (`sample; DROP TABLE sample;--`)
+      and a path-traversal payload (`../../etc/passwd`) as `type`,
+      confirmed to get a 400 rather than reaching SQL, with a follow-up
+      request confirming the `sample` table and its data genuinely
+      survived (not just "returned 400," but "the injection didn't
+      fire"). All 24 existing + new bats tests and all unit tests still
+      pass.
 - [x] **Known gap, found while auditing the hover-popover rollout
       (`3d50607`), now fixed**: `/sql`'s entity-reference-link resolution
       (`view.reference_columns`, `src/view.lua`) only covered a single,

@@ -59,6 +59,27 @@ teardown() {
     [[ "$output" =~ "LOT-42" ]]
 }
 
+@test "/browse rejects a 'type' shaped like a stacked-SQL-statement injection" {
+    run_cgi "/browse" "type=sample%3B+DROP+TABLE+sample%3B--"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "400 Bad Request" ]]
+    # the entity table must survive -- confirm sample is still queryable
+    run_cgi "/browse" "type=sample"
+    [[ "$output" =~ "LOT-42" ]]
+}
+
+@test "/browse rejects a 'type' shaped like a path-traversal payload" {
+    run_cgi "/browse" "type=..%2F..%2Fetc%2Fpasswd"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "400 Bad Request" ]]
+}
+
+@test "/api/preview rejects a 'type' shaped like a SQL-injection payload" {
+    run_cgi "/api/preview" "type=sample%3B+DROP+TABLE+sample%3B--&entity_id=1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "400 Bad Request" ]]
+}
+
 @test "/sql resolves a reference column on the FROM table" {
     # /sql requires Setup or Admin capability (not just baseline "i").
     FOSSIL_CAPABILITIES="is" run_cgi "/sql" "q=SELECT+id%2C+lot_number%2C+experiment+FROM+sample%3B"

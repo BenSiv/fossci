@@ -341,6 +341,26 @@ function schema.show_json(db_path, name)
     return dkjson.encode(layout)
 end
 
+-- Whether `name` has the shape a real registered entity-type name could
+-- ever have -- lowercase ASCII letters/digits/underscore, not starting
+-- with a digit, matching how every real schema file names itself
+-- (`schema.register`'s `def.name`, always written this way by hand).
+--
+-- Security finding, fixed 2026-07-17 (see fossci's own TODO.md, M3):
+-- `entity_type` flows unescaped into raw SQL as a table name
+-- (`entity.lua`/`db.lua`, `"SELECT * FROM " .. entity_type`) and into a
+-- file path for schema lookup (`schemas_dir .. "/" .. name .. ".lua"`)
+-- wherever it comes from a request parameter (`params.type`). Every
+-- call site happened to be safe only because it incidentally checked
+-- the name resolves via schema.layout/schema.fields first -- not a
+-- deliberate guard. This is that guard: a single charset check, applied
+-- once, centrally, at every point in cgi.lua where `params.type`/
+-- `params.ref_type`-shaped external input becomes an `entity_type`,
+-- before it can reach any raw SQL or path-building call.
+function schema.valid_name_syntax(name)
+    return type(name) == "string" and string.match(name, "^[a-z_][a-z0-9_]*$") != nil
+end
+
 -- Whether `entity_type` has been registered at all. A registered type
 -- can legitimately have zero custom fields (e.g. a schema whose only
 -- data is its name plus the system-managed created/updated columns),

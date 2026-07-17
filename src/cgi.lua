@@ -111,6 +111,9 @@ function handle_autocomplete(db_path, params)
     if ref_type == nil or ref_type == "" then
         return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type"}))
     end
+    if not schema.valid_name_syntax(ref_type) then
+        return print_response("400 Bad Request", "application/json", json.encode({error = "Invalid type"}))
+    end
 
     if not db.table_exists(db_path, ref_type) then
         return print_response("200 OK", "application/json", "[]")
@@ -174,6 +177,9 @@ function handle_preview(db_path, params)
     entity_id = tonumber(params.entity_id)
     if entity_type == nil or entity_type == "" or entity_id == nil then
         return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type or entity_id"}))
+    end
+    if not schema.valid_name_syntax(entity_type) then
+        return print_response("400 Bad Request", "application/json", json.encode({error = "Invalid type"}))
     end
     if not db.table_exists(db_path, entity_type) then
         return print_response("200 OK", "application/json", json.encode({html = "Unknown entity type."}))
@@ -263,6 +269,9 @@ function cgi.handle_request()
         if entity_type == nil or entity_type == "" then
             return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' parameter</h3></div>")
         end
+        if not schema.valid_name_syntax(entity_type) then
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Invalid 'type' parameter</h3></div>")
+        end
 
         layout, err = schema.layout(db_path, entity_type)
         if layout == nil then
@@ -279,6 +288,9 @@ function cgi.handle_request()
         entity_type = params.type
         if entity_type == nil or entity_type == "" then
             return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' parameter</h3></div>")
+        end
+        if not schema.valid_name_syntax(entity_type) then
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Invalid 'type' parameter</h3></div>")
         end
 
         layout, err = schema.layout(db_path, entity_type)
@@ -325,6 +337,9 @@ function cgi.handle_request()
         entity_id = tonumber(params.entity_id)
         if entity_type == nil or entity_type == "" or entity_id == nil then
             return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Missing 'type' or 'entity_id' parameter</h3></div>")
+        end
+        if not schema.valid_name_syntax(entity_type) then
+            return print_response("400 Bad Request", "text/html", "<div class='fossil-doc'><h3>Error: Invalid 'type' parameter</h3></div>")
         end
 
         layout, err = schema.layout(db_path, entity_type)
@@ -480,6 +495,9 @@ function cgi.handle_request()
         if entity_type == nil or entity_type == "" then
             return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type"}))
         end
+        if not schema.valid_name_syntax(entity_type) then
+            return print_response("400 Bad Request", "application/json", json.encode({error = "Invalid type"}))
+        end
         input = io.read("*all")
         rows_values, _, err = json.decode(input)
         if rows_values == nil then
@@ -493,6 +511,9 @@ function cgi.handle_request()
         entity_type = params.type
         if entity_type == nil or entity_type == "" then
             return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type"}))
+        end
+        if not schema.valid_name_syntax(entity_type) then
+            return print_response("400 Bad Request", "application/json", json.encode({error = "Invalid type"}))
         end
         input = io.read("*all")
         rows_values, _, err = json.decode(input)
@@ -518,6 +539,9 @@ function cgi.handle_request()
         entity_id = tonumber(params.entity_id) -- not "id" -- see /detail's comment
         if entity_type == nil or entity_type == "" or entity_id == nil then
             return print_response("400 Bad Request", "application/json", json.encode({error = "Missing type or entity_id"}))
+        end
+        if not schema.valid_name_syntax(entity_type) then
+            return print_response("400 Bad Request", "application/json", json.encode({error = "Invalid type"}))
         end
         input = io.read("*all")
         values, _, err = json.decode(input)

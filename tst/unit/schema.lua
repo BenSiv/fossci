@@ -111,6 +111,27 @@ function test_number_field_non_numeric_min_rejected()
     check(err != nil, "expected an error for a non-numeric min")
 end
 
+function test_valid_name_syntax_accepts_real_schema_names()
+    print("Testing valid_name_syntax accepts real schema-name shapes")
+    check(schema.valid_name_syntax("sample") == true, "expected 'sample' to be valid")
+    check(schema.valid_name_syntax("bioreactor_run") == true, "expected 'bioreactor_run' to be valid")
+    check(schema.valid_name_syntax("_private") == true, "expected '_private' to be valid")
+    check(schema.valid_name_syntax("a1") == true, "expected 'a1' to be valid")
+end
+
+function test_valid_name_syntax_rejects_injection_and_traversal_shapes()
+    print("Testing valid_name_syntax rejects SQL-injection/path-traversal shapes")
+    check(schema.valid_name_syntax("sample; DROP TABLE sample;--") == false, "expected a stacked-statement payload to be rejected")
+    check(schema.valid_name_syntax("sample WHERE 1=1") == false, "expected an embedded-SQL payload to be rejected")
+    check(schema.valid_name_syntax("../../etc/passwd") == false, "expected a path-traversal payload to be rejected")
+    check(schema.valid_name_syntax("sample/../other") == false, "expected an embedded slash to be rejected")
+    check(schema.valid_name_syntax("Sample") == false, "expected an uppercase name to be rejected")
+    check(schema.valid_name_syntax("1sample") == false, "expected a leading digit to be rejected")
+    check(schema.valid_name_syntax("") == false, "expected an empty string to be rejected")
+    check(schema.valid_name_syntax(nil) == false, "expected nil to be rejected")
+    check(schema.valid_name_syntax(42) == false, "expected a non-string to be rejected")
+end
+
 -- Run them
 test_valid_schema_passes()
 test_non_table_rejected()
@@ -125,6 +146,8 @@ test_every_real_field_type_individually()
 test_number_field_min_max_valid()
 test_number_field_min_greater_than_max_rejected()
 test_number_field_non_numeric_min_rejected()
+test_valid_name_syntax_accepts_real_schema_names()
+test_valid_name_syntax_rejects_injection_and_traversal_shapes()
 
 if FAILURES > 0 then
     print(FAILURES .. " test(s) failed")
