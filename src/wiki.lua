@@ -25,6 +25,32 @@ function wiki.fossil_bin()
     return bin
 end
 
+-- Returns a plain list of every real wiki page name in the repository
+-- (technote/checkin/branch/tag/ticket synthetic pages excluded -- `fossil
+-- wiki list` already excludes those by default, see src/wiki.c, unless
+-- --show-associated is passed, which this doesn't). One name per line on
+-- stdout; used to build a live folder tree from names that follow a
+-- "<folder>/<entry>" convention, instead of a one-time static snapshot --
+-- see html.render_notebook_tree.
+function wiki.list_pages(repo_fossil)
+    output_path = os.tmpname()
+    cmd = wiki.fossil_bin() .. " --nocgi wiki list -R " .. wiki.shell_quote(repo_fossil) ..
+        " >" .. wiki.shell_quote(output_path) .. " 2>&1"
+    os.execute(cmd)
+
+    names = {}
+    fh = io.open(output_path, "r")
+    if fh != nil then
+        content = io.read(fh, "*all")
+        io.close(fh)
+        for line in string.gmatch(content, "[^\n]+") do
+            table.insert(names, line)
+        end
+    end
+    os.remove(output_path)
+    return names
+end
+
 function wiki.page_exists(repo_fossil, name)
     cmd = wiki.fossil_bin() .. " --nocgi wiki export " .. wiki.shell_quote(name) ..
         " - -R " .. wiki.shell_quote(repo_fossil) .. " >/dev/null 2>&1"

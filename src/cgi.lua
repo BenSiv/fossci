@@ -452,6 +452,21 @@ function cgi.handle_request()
         return print_response("200 OK", "application/json", json.encode({success = true, name = req.name}))
     end
 
+    -- Real bug found in production, 2026-07-17: a static, one-time
+    -- generated "Notebook Index" wiki page never reflected new pages
+    -- created afterward, no matter their name -- it was a batch
+    -- migration script's output, not something regenerated dynamically.
+    -- This route replaces it: rendered fresh from Fossil's own live wiki
+    -- page list on every request, so it can never go stale. `prefix`/
+    -- `title` are optional query params -- a deployment scopes/labels
+    -- this itself (see software's layout.lua nav entry), fossci has no
+    -- opinion on naming conventions.
+    if path_info == "/notebook" then
+        pages = wiki.list_pages(repo_fossil)
+        body = html.render_notebook_tree(pages, params.prefix, params.title, default_value(os.getenv("FOSSIL_NONCE"), ""))
+        return print_response("200 OK", "text/html", body)
+    end
+
     if path_info == "/api/autocomplete" then
         return handle_autocomplete(db_path, params)
     end

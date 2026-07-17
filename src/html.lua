@@ -1720,4 +1720,142 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
 """, html.popover_css(), escaped_sql, result_html, html.popover_js(nonce))
 end
 
+-- Percent-encodes everything except unreserved characters and "/" --
+-- wiki page names following the "<folder>/<entry>" convention (see
+-- html.render_notebook_tree) keep their literal slashes in the URL for
+-- readability; Fossil's own `name` query-param parsing decodes
+-- percent-encoding either way, so keeping "/" literal vs. encoding it as
+-- %2F makes no functional difference, just a more readable URL.
+function url_encode_keep_slash(s)
+    return (string.gsub(s, "[^%w%-%.%_%~/]", function(c)
+        return string.format("%%%02X", string.byte(c))
+    end))
+end
+
+-- Builds a nested {children = {name -> node}, entries = {{leaf, full_name}}}
+-- tree from a flat list of wiki page names, splitting each on "/" --
+-- e.g. "Celleste R&D/Experiments/test_experiment" becomes a "Celleste
+-- R&D" folder containing an "Experiments" folder containing one entry.
+-- A page name with no "/" at all becomes a root-level entry, not a
+-- folder. `prefix`, if given, keeps only names equal to it or starting
+-- with "prefix/" -- e.g. a deployment might scope this to just the
+-- migrated-content subtree, filtering out unrelated top-level pages
+-- (Home, System, ...) that don't use this convention at all.
+function build_notebook_tree(page_names, prefix)
+    root = {children = {}, entries = {}}
+    for _, name in ipairs(page_names) do
+        included = false
+        if prefix == nil or prefix == "" then
+            included = true
+        elseif name == prefix then
+            included = true
+        elseif string.sub(name, 1, string.len(prefix) + 1) == (prefix .. "/") then
+            included = true
+        end
+        if included then
+            segments = {}
+            for seg in string.gmatch(name, "[^/]+") do
+                table.insert(segments, seg)
+            end
+            n = #segments
+            if n > 0 then
+                leaf = segments[n]
+                node = root
+                for i = 1, n - 1 do
+                    seg = segments[i]
+                    if node.children[seg] == nil then
+                        node.children[seg] = {children = {}, entries = {}}
+                    end
+                    node = node.children[seg]
+                end
+                table.insert(node.entries, {leaf = leaf, full_name = name})
+            end
+        end
+    end
+    return root
+end
+
+function render_notebook_tree_node(node, depth)
+    folder_names = {}
+    for name, _ in pairs(node.children) do
+        table.insert(folder_names, name)
+    end
+    table.sort(folder_names)
+
+    parts = {}
+    for _, name in ipairs(folder_names) do
+        child = node.children[name]
+        open_attr = ""
+        if depth == 0 then
+            open_attr = " open"
+        end
+        table.insert(parts, "<details" .. open_attr .. "><summary>" .. html_escape(name) .. "</summary>")
+        table.insert(parts, render_notebook_tree_node(child, depth + 1))
+
+        entries = child.entries
+        table.sort(entries, function(a, b) return string.lower(a.leaf) < string.lower(b.leaf) end)
+        for _, entry in ipairs(entries) do
+            table.insert(parts, "<div class=\"entry-link\"><a href=\"/wiki?name=" ..
+                url_encode_keep_slash(entry.full_name) .. "\">" .. html_escape(entry.leaf) .. "</a></div>")
+        end
+        table.insert(parts, "</details>")
+    end
+    return table.concat(parts, "\n")
+end
+
+-- Generic, deployment-agnostic "folder tree" view over Fossil's live
+-- wiki page list -- see doc/task-management.md-style reasoning: this
+-- replaces what used to be a one-time static snapshot (a real bug found
+-- in production -- new pages never appeared on it, no matter their
+-- name, since it was generated once by a batch migration script and
+-- never regenerated). Rendered fresh on every request instead, directly
+-- against `wiki.list_pages`, so it can never go stale. `title` and
+-- `prefix` are both deployment choices -- fossci itself has no opinion
+-- on what a repository's top-level folder convention should be named.
+function html.render_notebook_tree(page_names, prefix, title, nonce)
+    if title == nil then
+        title = "Notebook"
+    end
+    if nonce == nil then
+        nonce = ""
+    end
+    tree = build_notebook_tree(page_names, prefix)
+    tree_html = render_notebook_tree_node(tree, 0)
+    if tree_html == "" then
+        tree_html = "<p class=\"fossci-empty\">No entries yet.</p>"
+    end
+
+    return string.format("""
+<div class="fossil-doc" data-title="%s">
+    <style>
+        .fossci-container {
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--fossci-text, #334155);
+            background: #ffffff;
+            padding: 28px;
+            border-radius: var(--fossci-radius-lg, 16px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin: 20px auto;
+            max-width: 900px;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
+        }
+        .fossci-empty {
+            padding: 32px;
+            text-align: center;
+            color: var(--fossci-muted, #64748b);
+            background: var(--fossci-bg, #f8fafc);
+            border: 1px dashed var(--fossci-border, #e2e8f0);
+            border-radius: var(--fossci-radius-md, 12px);
+        }
+    </style>
+    <div class="fossci-container">
+        <h1>%s</h1>
+        <div class="fossci-notebook-tree">
+        %s
+        </div>
+    </div>
+</div>
+""", html_escape(title), html_escape(title), tree_html)
+end
+
 return html
