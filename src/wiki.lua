@@ -6,6 +6,8 @@
 -- Fossil-core machinery, not something to reimplement via raw SQL here,
 -- matching the same "defer to Fossil's own CLI" stance already taken
 -- for password hashing (see users.lua/sync_users.py).
+db = require("db")
+
 wiki = {}
 
 -- Both os.execute and io.popen run through the system shell (system()/
@@ -17,12 +19,35 @@ function wiki.shell_quote(value)
     return "'" .. string.gsub(tostring(value), "'", "'\\''") .. "'"
 end
 
-function wiki.fossil_bin()
+-- Real bug found live 2026-07-18: FOSSIL_BIN (like every other env var
+-- except fossil-scm's own fixed CGI whitelist, see extcgi.c's azCgiEnv)
+-- never actually reaches this code on a real request. fossil-scm's own
+-- /ext dispatch calls fossil_clearenv() then re-populates ONLY that
+-- whitelist before spawning fossci (confirmed directly: reproduced the
+-- exact env-wiped shape against the real production container --
+-- `env -i sh -c "fossil wiki list ..."` -- and got the same "fossil:
+-- not found" the live site did). FOSSIL_BIN was never in that
+-- whitelist, so the bare "fossil" fallback below was *always* wrong on
+-- a real HTTP request going through fossil-scm's /ext relay -- it only
+-- ever worked when this code was invoked directly (bats tests, `fossci`
+-- CLI use), which is why this went undiscovered until a real user hit
+-- it. Falls back to a deployment-configured path (layout.lua's
+-- `fossil_bin_path`, synced into the repo's own config table the same
+-- way header/footer/css are) before the env var, since the env var can
+-- never actually help here -- kept only for whatever non-CGI paths
+-- (CLI, tests) still set it directly.
+function wiki.fossil_bin(repo_fossil)
     bin = os.getenv("FOSSIL_BIN")
-    if bin == nil or bin == "" then
-        return "fossil"
+    if bin != nil and bin != "" then
+        return bin
     end
-    return bin
+    if repo_fossil != nil and repo_fossil != "" then
+        rows = db.query(repo_fossil, "SELECT value FROM config WHERE name = 'fossci-fossil-bin';")
+        if rows != nil and rows[1] != nil and rows[1].value != nil and rows[1].value != "" then
+            return rows[1].value
+        end
+    end
+    return "fossil"
 end
 
 -- Returns a plain list of every real wiki page name in the repository
@@ -34,7 +59,7 @@ end
 -- see html.render_notebook_tree.
 function wiki.list_pages(repo_fossil)
     output_path = os.tmpname()
-    cmd = wiki.fossil_bin() .. " --nocgi wiki list -R " .. wiki.shell_quote(repo_fossil) ..
+    cmd = wiki.fossil_bin(repo_fossil) .. " --nocgi wiki list -R " .. wiki.shell_quote(repo_fossil) ..
         " >" .. wiki.shell_quote(output_path) .. " 2>&1"
     os.execute(cmd)
 
@@ -52,7 +77,7 @@ function wiki.list_pages(repo_fossil)
 end
 
 function wiki.page_exists(repo_fossil, name)
-    cmd = wiki.fossil_bin() .. " --nocgi wiki export " .. wiki.shell_quote(name) ..
+    cmd = wiki.fossil_bin(repo_fossil) .. " --nocgi wiki export " .. wiki.shell_quote(name) ..
         " - -R " .. wiki.shell_quote(repo_fossil) .. " >/dev/null 2>&1"
     return os.execute(cmd) == 0
 end
@@ -99,7 +124,7 @@ function wiki.create_page(repo_fossil, name, content, mimetype, author)
     -- shells out to what fossil thinks is ANOTHER cgi request, not a CLI
     -- command, and it fails with a confusing "no such file: wiki" (confirmed
     -- by reproducing locally with GATEWAY_INTERFACE set vs unset).
-    cmd = wiki.fossil_bin() .. " --nocgi wiki create " .. wiki.shell_quote(name) ..
+    cmd = wiki.fossil_bin(repo_fossil) .. " --nocgi wiki create " .. wiki.shell_quote(name) ..
         " " .. wiki.shell_quote(content_path) ..
         " -R " .. wiki.shell_quote(repo_fossil) ..
         " -M " .. wiki.shell_quote(mimetype) ..

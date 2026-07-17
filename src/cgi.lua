@@ -321,6 +321,17 @@ function cgi.handle_request()
         for _, row in ipairs(entity_types) do
             row.count = entity.count(db_path, row.name)
         end
+        -- Highest row count first -- the types actually in active use
+        -- surface above ones with zero/few rows, rather than whatever
+        -- order schema.list()'s underlying query happened to return
+        -- (alphabetical). A stable tie-break (name) keeps repeated
+        -- requests from visibly reshuffling equal-count types.
+        table.sort(entity_types, function(a, b)
+            if a.count != b.count then
+                return a.count > b.count
+            end
+            return a.name < b.name
+        end)
         edges = schema.relationships(db_path)
         index_capabilities = os.getenv("FOSSIL_CAPABILITIES")
         show_sql_widget = cgi.has_capability(index_capabilities, "s") or cgi.has_capability(index_capabilities, "a")

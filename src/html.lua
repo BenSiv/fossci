@@ -1260,6 +1260,16 @@ function html.diagram_js(nonce)
         });
     }
 
+    var hideEmpty = document.getElementById('fossci-hide-empty');
+    if(hideEmpty && listView){
+        hideEmpty.addEventListener('change', function(){
+            listView.querySelectorAll('li[data-count]').forEach(function(li){
+                var isEmpty = li.getAttribute('data-count') === '0';
+                li.style.display = (hideEmpty.checked && isEmpty) ? 'none' : '';
+            });
+        });
+    }
+
     var svg = document.getElementById('fossci-diagram-svg');
     if(!svg) return;
     var nodes = svg.querySelectorAll('.fossci-diagram-node');
@@ -1338,7 +1348,11 @@ function html.render_index(entity_types, edges, show_sql_widget, nonce)
             trigger_class = "fossci-popover-trigger"
             count_popover = "<span class=\"fossci-popover\">" .. count_label .. "</span>"
         end
-        items = items .. "<li><a href=\"fossci/browse?type=" .. escaped_name .. "\" class=\"" .. trigger_class .. "\" tabindex=\"0\">" .. escaped_name ..
+        row_count = 0
+        if row.count != nil then
+            row_count = row.count
+        end
+        items = items .. "<li data-count=\"" .. tostring(row_count) .. "\"><a href=\"fossci/browse?type=" .. escaped_name .. "\" class=\"" .. trigger_class .. "\" tabindex=\"0\">" .. escaped_name ..
             count_popover .. "</a></li>"
     end
 
@@ -1377,6 +1391,8 @@ function html.render_index(entity_types, edges, show_sql_widget, nonce)
         .fossci-view-toggle { display: flex; gap: 6px; flex-shrink: 0; }
         .fossci-view-toggle button { padding: 6px 14px; border-radius: var(--fossci-radius-sm, 8px); border: 1px solid var(--fossci-border, #e2e8f0); background: var(--fossci-bg, #f8fafc); color: var(--fossci-text, #334155); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1)); }
         .fossci-view-toggle button.fossci-view-active { background: var(--fossci-accent, #4f46e5); border-color: var(--fossci-accent, #4f46e5); color: #ffffff; }
+        .fossci-hide-empty-toggle { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--fossci-muted, #64748b); cursor: pointer; user-select: none; margin-right: 8px; }
+        .fossci-hide-empty-toggle input { cursor: pointer; }
         .fossci-index-list { list-style: none !important; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
         .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-item, 10px); display: flex; align-items: center; transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1)); }
         .fossci-index-list li:hover { border-color: var(--fossci-accent, #4f46e5); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
@@ -1401,6 +1417,7 @@ function html.render_index(entity_types, edges, show_sql_widget, nonce)
                 <p>%d registered</p>
             </div>
             <div class="fossci-view-toggle" id="fossci-view-toggle">
+                <label class="fossci-hide-empty-toggle"><input type="checkbox" id="fossci-hide-empty"> Hide empty types</label>
                 <button type="button" data-view="list" class="fossci-view-active">List</button>
                 <button type="button" data-view="diagram">Diagram</button>
             </div>
@@ -1814,6 +1831,14 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
         .fossci-sql-input {
             width: 100%%;
+            /* max-width explicit, not left to inherit: Fossil's own base
+            ** CSS (src/default.css) has a bare "textarea { max-width:
+            ** 95%% }" rule that otherwise wins over nothing here -- a
+            ** real, confirmed-live gap between this box and the
+            ** .fossci-nlsql row above it (measured 1045px vs 1100px,
+            ** exactly 95%% of the same 1100px parent). This class
+            ** selector's higher specificity overrides it. */
+            max-width: 100%%;
             min-height: 140px;
             box-sizing: border-box;
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

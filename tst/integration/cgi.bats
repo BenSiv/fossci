@@ -57,6 +57,21 @@ teardown() {
     [[ "$output" =~ "fossci-diagram-edge\" data-from=\"sample\" data-to=\"experiment\"" ]]
 }
 
+@test "/ sorts entity types by row count descending, alphabetical tiebreak, with data-count for the hide-empty toggle" {
+    "$FOSSCI" entity create person full_name="Dr. Amare"
+    "$FOSSCI" entity create person full_name="Dr. Beadle"
+    # person now has 3 rows (1 from setup + 2 here); experiment and
+    # sample each still have 1 -- person must sort first, then
+    # experiment before sample (alphabetical tiebreak on equal counts).
+    run_cgi "/" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'data-count="3"><a href="fossci/browse?type=person"' ]]
+    before_experiment="${output%%'type=experiment"'*}"
+    [[ "$before_experiment" == *'type=person"'* ]]
+    before_sample="${output%%'type=sample"'*}"
+    [[ "$before_sample" == *'type=experiment"'* ]]
+}
+
 @test "/register renders the registration form for a real entity type" {
     run_cgi "/register" "type=sample"
     [ "$status" -eq 0 ]
@@ -101,6 +116,17 @@ teardown() {
     run_cgi "/api/preview" "type=experiment&entity_id=2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Dr. Cohen" ]]
+}
+
+@test "/sql query textarea overrides Fossil's base 95% textarea max-width" {
+    # Reported live: the query textarea measured visibly narrower than
+    # the prompt-input+button row above it -- traced to Fossil's own
+    # base CSS (src/default.css: "textarea { max-width: 95%; }"), which
+    # otherwise wins with nothing overriding it here.
+    FOSSIL_CAPABILITIES="is" run_cgi "/sql" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "fossci-sql-input" ]]
+    [[ "$output" =~ "max-width: 100%" ]]
 }
 
 @test "/sql resolves a reference column on the FROM table" {

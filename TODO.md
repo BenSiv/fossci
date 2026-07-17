@@ -114,6 +114,55 @@
       layout, hover-highlighting the right edges/dimming the rest, and
       clicking a node navigating to its `/browse?type=X` page -- all
       working end to end, screenshotted before and during hover.
+- [x] **Significant bug found and fixed 2026-07-18** (found while
+      investigating "a Notebook page created outside the deployment's
+      prefix doesn't show at all" -- that turned out to be the smaller
+      of two bugs): `wiki.lua`'s `wiki.fossil_bin()` fell back to a bare
+      `os.getenv("FOSSIL_BIN")`, and ultimately a bare `"fossil"` command
+      resolved via `PATH`, to locate the real Fossil binary for its
+      shell-outs (`fossil wiki list`/`create`/`export`, backing
+      `/notebook`, `/wiki-new`, and every internal "does this page
+      already exist" check). **Neither ever actually reaches a real HTTP
+      request**: fossil-scm's own `/ext` dispatch (`extcgi.c`) calls
+      `fossil_clearenv()` then re-populates *only* a small fixed
+      whitelist (`azCgiEnv[]` -- GATEWAY_INTERFACE, PATH_INFO,
+      FOSSIL_REPOSITORY, etc.) before spawning fossci as a child process
+      -- `FOSSIL_BIN` was never in that list, and neither is `PATH`
+      itself. So the bare-`"fossil"`-via-`PATH` fallback was broken on
+      *every* real production request, full stop -- it only ever
+      appeared to work because every prior check of this code (bats
+      tests, direct CLI use) invoked fossci directly, bypassing
+      fossil-scm's dispatch (and its env-wiping) entirely. Confirmed
+      directly against the real production container, not just reasoned
+      from source: `env -i sh -c "fossil wiki list -R
+      /data/repo.fossil"` reproduces the exact same `fossil: not found`
+      a real request hit.
+
+      Fixed generically in fossci (not a Celleste-Bio-specific patch):
+      `wiki.fossil_bin(repo_fossil)` now also checks a new deployment
+      setting, `fossci-fossil-bin`, read from the repo's own Fossil
+      config table -- synced there by `layout.sync()` from a new
+      optional `fossil_bin_path` layout.lua field, the exact same
+      mechanism `header`/`footer`/`css` already use, chosen specifically
+      *because* it doesn't depend on any environment variable surviving
+      fossil-scm's own CGI dispatch. `FOSSIL_BIN` itself is still
+      checked first (harmless for whatever non-CGI paths, e.g. CLI, do
+      still set it), and a bare `"fossil"` remains the final fallback.
+
+      Verified: 4 new Luam unit tests (`tst/unit/wiki.lua`) covering the
+      full fallback chain against a scratch config table; all 28
+      integration tests still pass; then, to prove this wasn't just
+      unit-level, reproduced the *exact* originally-broken scenario
+      end-to-end -- a real `fossil cgi` invocation of `/ext/fossci/
+      notebook` (fossil-scm's actual dispatch, not a bats-style direct
+      binary call) against a repo with the new config value set and
+      *no* `FOSSIL_BIN` in the environment -- and confirmed pages that
+      previously came back empty (`"No entries yet"`) now list
+      correctly. `/wiki-new`'s "does this page already exist" check
+      (`wiki.page_exists`) and page creation (`wiki.create_page`) share
+      the exact same fixed function, so this likely also silently fixes
+      a related, not-yet-separately-reported "New Page" failure mode --
+      worth keeping an eye on, not independently reproduced here.
 - [x] Entity browse/detail views: `GET /browse?type=X` (table of all
       entities of a type) and `GET /detail?type=X&id=Y` (current field
       values + full ledger history), both pure server-rendered HTML, no

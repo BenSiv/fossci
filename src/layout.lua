@@ -269,6 +269,15 @@ function layout.sync(repo_fossil, def, root)
     if def.search_tkt != nil then
         sync_bool_setting(repo_fossil, "search-tkt", def.search_tkt)
     end
+    -- Read back by wiki.lua's wiki.fossil_bin() -- a real HTTP request
+    -- reaching fossci through fossil-scm's own /ext dispatch has
+    -- FOSSIL_BIN (and PATH, and every other env var outside its own
+    -- fixed CGI whitelist) wiped before this process even starts, so an
+    -- env var can never carry this reliably; the repo's own config
+    -- table, synced here exactly like header/footer/css, can.
+    if def.fossil_bin_path != nil then
+        set_config(repo_fossil, "fossci-fossil-bin", def.fossil_bin_path)
+    end
 end
 
 -- Fossil's own db_get_boolean() (src/db.c) accepts "1"/"0" among other
