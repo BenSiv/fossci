@@ -8,6 +8,18 @@
 - [x] Minimal CLI: `init`, `schema`, `entity`, `ledger`
 - [x] Capability-scoped sandbox primitive (`load` + `setfenv`), proven with a trivial example extension
 - [x] Test harness: bats CLI tests + Luam unit tests
+      **Correction, found 2026-07-17 while planning fossci's CI/CD** (see
+      `software`'s `docs/fossci-cicd-plan.md`, issue #8): in this
+      checkout, both `tst/unit/` and `tst/integration/` are empty
+      directories -- confirmed directly (`find tst -type f` returns
+      nothing), no bats files, no Luam test files. Whatever "done" here
+      referred to (a prior checkout, or just the scaffold/convention
+      being in place, matching M1's own later note that `tst/integration`
+      specifically stayed empty) doesn't reflect this checkout's actual
+      state -- correctness verification this session was done entirely
+      by hand (real CLI/CGI invocations against live test stores, see
+      recent commits), which doesn't scale to an automated CI gate. Real
+      tests need to exist here before any CI pipeline can run them.
 
 ## Next (M1 -- registration workflow)
 - [x] Registration-table CGI flow: fossci renders and serves its own
