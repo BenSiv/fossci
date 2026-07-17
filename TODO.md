@@ -219,17 +219,34 @@
       `"Experiment: exp343"` / `"Container: Petri dish 9cm"` where it
       previously showed the raw ids.
 
-- [ ] **Investigated 2026-07-18, not a bug, needs more repro detail**:
-      Celleste-Bio reported the nav-icon hover tooltip (`.fossci-nav-label`)
-      never shows on any page. A real headless-browser trace against a
-      local replica seeded with production's actual skin config hovered
-      all 7 real nav icons across both a fossci page and two genuinely
-      Fossil-native pages (`/wiki`, `/timeline`) -- every tooltip showed
-      correctly, positioned correctly, every time. Whatever's failing for
-      the real user isn't reproduced by a synthetic CDP hover event in
-      this replica; needs either a specific repro (which icon, timing,
-      browser) or a live trace against the actual browser session that's
-      failing.
+- [ ] **Investigated 2026-07-18, not reproduced anywhere, needs more repro
+      detail from the user**: Celleste-Bio reported the nav-icon hover
+      tooltip (`.fossci-nav-label`) never shows on any page. Tested
+      twice: first a headless-browser trace against a local replica
+      seeded with production's actual skin config (all 7 real nav icons
+      across both a fossci page and two genuinely Fossil-native pages,
+      `/wiki`/`/timeline` -- every tooltip correct every time); then,
+      since that could just mean the replica wasn't faithful enough, a
+      second trace against the **real live production site**
+      (celleste-lims.com) with a real temporary login session -- same
+      result, all 6 real icons (7th is the hidden hamburger button)
+      showed `opacity:1`/`visibility:visible` at the correct computed
+      position, every time. One real false alarm caught and corrected
+      along the way: an initial fast pass (checking computed style
+      immediately after the synthetic hover, no settle time) showed
+      `opacity:0`/`hidden` for some icons -- not a real bug, just reading
+      the CSS transition (`var(--fossci-transition)`, ~0.2-0.3s) before
+      it finished; waiting ~400ms after each hover before reading fixed
+      it in both environments.
+
+      This means the underlying mechanism has now been verified correct
+      against the actual deployed code, on the actual production site,
+      with a real session -- twice. Whatever the real user is
+      experiencing isn't a positioning/visibility bug in this code as
+      exercised here. Needs one of: the specific browser/OS/device (a
+      touch-only device wouldn't have a real `:hover` state at all), how
+      long they're actually pausing on an icon before giving up, or
+      (most useful) a screen recording of the failure.
 
 ## Deliberately deferred (see project_plan.md)
 - [ ] Live/as-you-type validation
