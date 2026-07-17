@@ -16,6 +16,71 @@ function html_escape(s)
     return s
 end
 
+-- Two more escaping functions, deliberately distinct from html_escape
+-- above: HTML tag content/attributes and inline-<script> content are
+-- different injection contexts and need different escaping, the same
+-- way Go's html/template picks an escaper per context rather than
+-- applying one generic function everywhere. html_escape is correct for
+-- values landing in HTML body text or an attribute; neither of the two
+-- below is that context.
+--
+-- json_for_script: for an *already JSON-encoded* string (json.encode's
+-- own output) that will be embedded inside an inline <script> body, e.g.
+-- `const layout = ` .. json_for_script(json.encode(layout)) .. `;`. A
+-- JSON encoder has no reason to escape "<" (not required by the JSON
+-- spec), but a literal "</script>" sequence inside a JSON string value
+-- terminates the surrounding <script> tag at the HTML-parser level --
+-- before any JS engine even looks at the content -- letting whatever
+-- follows execute as newly-opened markup. Confirmed as a real, working
+-- injection, not theoretical: a schema field's own `label` containing
+-- "</script><script>alert(1)</script>" did exactly this, unescaped,
+-- reaching the live page. < parses back to a literal "<" in
+-- JSON/JS, so this changes nothing about the decoded value.
+function json_for_script(json_string)
+    return (string.gsub(json_string, "<", "\\u003c"))
+end
+
+-- js_string_literal: for a plain (not-yet-JSON-encoded) Lua string
+-- being embedded directly inside a JS string literal, e.g.
+-- `const entityType = "` .. js_string_literal(entity_type) .. `";`.
+-- Escapes backslash and double-quote (so the value can't break out of
+-- the surrounding "..." literal) and "<" for the same script-tag-breakout
+-- reason json_for_script exists.
+function js_string_literal(s)
+    s = tostring(s)
+    s = string.gsub(s, "\\", "\\\\")
+    s = string.gsub(s, "\"", "\\\"")
+    s = string.gsub(s, "\n", "\\n")
+    s = string.gsub(s, "<", "\\u003c")
+    return s
+end
+
+-- The ".fossci-container" shell (card look: padding/shadow/border/
+-- rounded corners) was copy-pasted, identically byte-for-byte except
+-- max_width, into every render_* function's own inline <style> block --
+-- ten separate copies, confirmed by grepping the file directly. One
+-- shared definition instead; each caller supplies just the max-width
+-- its own page already used (1200/1100/900/800), so this is a pure
+-- de-duplication, not a visual change anywhere.
+function fossci_container_css(max_width)
+    if max_width == nil then
+        max_width = 1200
+    end
+    return string.format("""
+        .fossci-container {
+            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--fossci-text, #334155);
+            background: #ffffff;
+            padding: 28px;
+            border-radius: var(--fossci-radius-lg, 16px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin: 20px auto;
+            max-width: %dpx;
+            border: 1px solid var(--fossci-bg-2, #f1f5f9);
+        }
+""", max_width)
+end
+
 -- Generic hover-popover component, for "reveal detail on hover instead
 -- of cramming it into the default view" -- the design principle behind
 -- moving Data-index row counts and SQL-result entity previews off the
@@ -112,17 +177,7 @@ function html.render(entity_type, layout_json, nonce)
     return string.format("""
 <div class="fossil-doc" data-title="Register %s">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 1200px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header {
             margin-bottom: 24px;
             border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9);
@@ -586,7 +641,7 @@ function html.render(entity_type, layout_json, nonce)
         document.getElementById("btn-submit-batch").addEventListener("click", submitBatch);
     </script>
 </div>
-""", escaped_type, escaped_type, escaped_type, escaped_type, nonce, layout_json, entity_type)
+""", escaped_type, fossci_container_css(1200), escaped_type, escaped_type, escaped_type, nonce, json_for_script(layout_json), js_string_literal(entity_type))
 end
 
 function display_value(value)
@@ -780,17 +835,7 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
     return string.format("""
 <div class="fossil-doc" data-title="Browse %s">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 1200px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header {
             margin-bottom: 24px;
             border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9);
@@ -883,8 +928,20 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
     </div>
 </div>
 %s
-""", html.popover_css(), escaped_type, escaped_type, total, escaped_type, table_or_empty, pager, html.popover_js(nonce))
+""", escaped_type, fossci_container_css(1200), html.popover_css(), escaped_type, total, escaped_type, table_or_empty, pager, html.popover_js(nonce))
 end
+
+-- Real bug found while extracting fossci_container_css above, unrelated
+-- to that refactor: the args list here previously started with
+-- `html.popover_css()` where the FIRST %s in the template
+-- (`data-title="Browse %s"`) actually is -- meaning every /browse page's
+-- data-title (which Fossil's own doc.c reads to set the real page
+-- title, confirmed directly in fossil-scm's source) rendered as raw CSS
+-- text instead of "Browse <type>". The visible <h2> heading used a
+-- *different*, correctly-positioned escaped_type and was always fine --
+-- an easy thing to miss since the page looked completely normal, only
+-- the browser tab title was ever wrong. Fixed above by reordering the
+-- args to match where each %s actually is.
 
 -- Detail view: current field values plus the full ledger history for
 -- one entity. Also pure server-rendered HTML, no JS.
@@ -922,17 +979,7 @@ function html.render_detail(db_path, entity_type, layout, row, history, nonce)
     return string.format("""
 <div class="fossil-doc" data-title="%s %s">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 1200px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header { margin-bottom: 24px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; font-size: 0.9rem; }
@@ -995,7 +1042,7 @@ function html.render_detail(db_path, entity_type, layout, row, history, nonce)
     </div>
 </div>
 %s
-""", escaped_type, title_id_part, html.popover_css(), escaped_type, title_id_part, escaped_type, fields_html, history_rows, html.popover_js(nonce))
+""", escaped_type, title_id_part, fossci_container_css(1200), html.popover_css(), escaped_type, title_id_part, escaped_type, fields_html, history_rows, html.popover_js(nonce))
 end
 
 -- Generic view: any approved custom SQL view rendered as a table.
@@ -1057,17 +1104,7 @@ function html.render_view(view_def, rows, param_value)
     return string.format("""
 <div class="fossil-doc" data-title="%s">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 1200px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
@@ -1103,7 +1140,7 @@ function html.render_view(view_def, rows, param_value)
         %s
     </div>
 </div>
-""", escaped_title, escaped_title, subtitle, register_link, table_or_empty)
+""", escaped_title, fossci_container_css(1200), escaped_title, subtitle, register_link, table_or_empty)
 end
 
 -- fossci's own landing page: every registered entity type, linking to
@@ -1157,17 +1194,7 @@ function html.render_index(entity_types, show_sql_widget)
     return string.format("""
 <div class="fossil-doc" data-title="fossci">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 800px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
@@ -1196,7 +1223,7 @@ function html.render_index(entity_types, show_sql_widget)
     </div>
 %s
 </div>
-""", html.popover_css(), #entity_types, list_or_empty, sql_widget)
+""", fossci_container_css(800), html.popover_css(), #entity_types, list_or_empty, sql_widget)
 end
 
 -- Every entry template found (whether it loaded cleanly or not), each
@@ -1232,17 +1259,7 @@ function html.render_templates_list(entries)
     return string.format("""
 <div class="fossil-doc" data-title="Entry templates">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 800px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
@@ -1270,7 +1287,7 @@ function html.render_templates_list(entries)
         %s
     </div>
 </div>
-""", list_or_empty)
+""", fossci_container_css(800), list_or_empty)
 end
 
 -- The rendered Markdown snippet for one template, in a read-only
@@ -1311,17 +1328,7 @@ function html.render_template(def, rendered_markdown, nonce)
     return string.format("""
 <div class="fossil-doc" data-title="Template: %s">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 900px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
@@ -1426,7 +1433,7 @@ function html.render_template(def, rendered_markdown, nonce)
     })();
     </script>
 </div>
-""", escaped_label, escaped_label, escaped_desc, escaped_body, escaped_default_path, nonce)
+""", escaped_label, fossci_container_css(900), escaped_label, escaped_desc, escaped_body, escaped_default_path, nonce)
 end
 
 -- Blank "create a new wiki page" form -- fills the "Notebook has no new
@@ -1455,17 +1462,7 @@ function html.render_wiki_new(err, prefill_name, prefill_content, nonce)
     return string.format("""
 <div class="fossil-doc" data-title="New wiki page">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 900px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
@@ -1563,7 +1560,7 @@ function html.render_wiki_new(err, prefill_name, prefill_content, nonce)
     })();
     </script>
 </div>
-""", error_html, escaped_name, escaped_content, nonce)
+""", fossci_container_css(900), error_html, escaped_name, escaped_content, nonce)
 end
 
 -- Ad-hoc SQL console (Setup/Admin only -- see cgi.lua's /sql route):
@@ -1622,17 +1619,7 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
     return string.format("""
 <div class="fossil-doc" data-title="Query">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 1100px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
@@ -1726,7 +1713,7 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
     </div>
 </div>
 %s
-""", html.popover_css(), escaped_sql, result_html, html.popover_js(nonce))
+""", fossci_container_css(1100), html.popover_css(), escaped_sql, result_html, html.popover_js(nonce))
 end
 
 -- Percent-encodes everything except unreserved characters and "/" --
@@ -1837,17 +1824,7 @@ function html.render_notebook_tree(page_names, prefix, title, nonce)
     return string.format("""
 <div class="fossil-doc" data-title="%s">
     <style>
-        .fossci-container {
-            font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--fossci-text, #334155);
-            background: #ffffff;
-            padding: 28px;
-            border-radius: var(--fossci-radius-lg, 16px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            margin: 20px auto;
-            max-width: 900px;
-            border: 1px solid var(--fossci-bg-2, #f1f5f9);
-        }
+%s
         .fossci-empty {
             padding: 32px;
             text-align: center;
@@ -1864,7 +1841,7 @@ function html.render_notebook_tree(page_names, prefix, title, nonce)
         </div>
     </div>
 </div>
-""", html_escape(title), html_escape(title), tree_html)
+""", html_escape(title), fossci_container_css(900), html_escape(title), tree_html)
 end
 
 return html
