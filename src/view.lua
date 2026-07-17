@@ -142,6 +142,16 @@ function view.validate(def)
             return "view '" .. tostring(def.name) .. "': param 'type' must be one of integer/number/text"
         end
     end
+    -- Optional: which single entity type this view is primarily about,
+    -- if any (a view can join across types, so there isn't always one --
+    -- see html.render_view's own comment). Purely a rendering hint for
+    -- the "+ Register new" link; not cross-checked against schema.list()
+    -- here since view.load/validate has no db_path to check against --
+    -- a typo'd name just means a broken register link, not a security
+    -- concern (the /register route validates the type itself).
+    if def.entity_type != nil and (type(def.entity_type) != "string" or def.entity_type == "") then
+        return "view '" .. tostring(def.name) .. "': entity_type must be a non-empty string if present"
+    end
     return nil
 end
 

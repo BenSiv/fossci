@@ -1030,6 +1030,21 @@ function html.render_view(view_def, rows, param_value)
         table_or_empty = "<p class=\"fossci-empty\">No rows.</p>"
     end
 
+    -- A view has no schema of its own to register against (it can join
+    -- across entity types, see the function comment above) -- but a
+    -- view whose author declares a single `entity_type` it's primarily
+    -- about (e.g. a prioritized/filtered list over one real entity type)
+    -- can still offer the same "+ Register new" entry point
+    -- render_browse already has, instead of leaving read-only views as a
+    -- dead end with no way to add the row they're meant to be tracking.
+    register_link = ""
+    if view_def.entity_type != nil then
+        register_link = string.format(
+            "<a class=\"btn btn-primary\" href=\"fossci/register?type=%s\">+ Register new</a>",
+            html_escape(view_def.entity_type)
+        )
+    end
+
     return string.format("""
 <div class="fossil-doc" data-title="%s">
     <style>
@@ -1044,7 +1059,7 @@ function html.render_view(view_def, rows, param_value)
             max-width: 1200px;
             border: 1px solid var(--fossci-bg-2, #f1f5f9);
         }
-        .fossci-header { margin-bottom: 24px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
         .fossci-table-wrapper { overflow-x: auto; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-md, 12px); background: var(--fossci-bg, #f8fafc); }
@@ -1070,13 +1085,16 @@ function html.render_view(view_def, rows, param_value)
     </style>
     <div class="fossci-container">
         <div class="fossci-header">
-            <h2>%s</h2>
-            <p>%s</p>
+            <div>
+                <h2>%s</h2>
+                <p>%s</p>
+            </div>
+            %s
         </div>
         %s
     </div>
 </div>
-""", escaped_title, escaped_title, subtitle, table_or_empty)
+""", escaped_title, escaped_title, subtitle, register_link, table_or_empty)
 end
 
 -- fossci's own landing page: every registered entity type, linking to
