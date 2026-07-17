@@ -77,6 +77,27 @@ function schema.validate(def)
         if field.type == "select" and type(field.values) != "table" then
             return string.format("schema '%s' field '%s': type 'select' requires a 'values' list", def.name, field.name)
         end
+        -- Optional bounds on a "number" field -- UI-hint only for now
+        -- (wired into the registration table's <input type="number">
+        -- min/max, see html.lua), not yet enforced server-side. A real
+        -- bug found in production: without this, the registration
+        -- table's number input had no min/max at all, so its native
+        -- spinner arrows could be clicked past any sensible bound
+        -- (e.g. past 5 for a 1-5 field) with no feedback. Server-side
+        -- range enforcement, if a schema author needs it, is still a
+        -- before-hook extension's job (see software's
+        -- task-priority-range) -- consolidating that into a generic,
+        -- schema-declared, DB-enforced constraint is a bigger change
+        -- (entity_field would need new columns) not attempted here.
+        if field.min != nil and type(field.min) != "number" then
+            return string.format("schema '%s' field '%s': 'min' must be a number", def.name, field.name)
+        end
+        if field.max != nil and type(field.max) != "number" then
+            return string.format("schema '%s' field '%s': 'max' must be a number", def.name, field.name)
+        end
+        if field.min != nil and field.max != nil and field.min > field.max then
+            return string.format("schema '%s' field '%s': 'min' (%s) is greater than 'max' (%s)", def.name, field.name, tostring(field.min), tostring(field.max))
+        end
     end
     return nil
 end
@@ -269,6 +290,12 @@ function schema.layout(db_path, name)
             end
             if field.entity_type != nil then
                 field_def.ref_entity_type = field.entity_type
+            end
+            if field.min != nil then
+                field_def.min = field.min
+            end
+            if field.max != nil then
+                field_def.max = field.max
             end
             table.insert(result.fields, field_def)
         end

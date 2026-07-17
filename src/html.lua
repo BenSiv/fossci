@@ -401,6 +401,15 @@ function html.render(entity_type, layout_json, nonce)
                     if (field.type === "number") {
                         input.type = "number";
                         input.step = "any";
+                        // Real bug found in production: with no min/max
+                        // set, the native spinner arrows let a value
+                        // cycle past any sensible bound (e.g. past 5 on
+                        // a 1-5 field) with zero feedback. Both optional
+                        // -- a schema author declares them per-field
+                        // (see schema.md), fossci itself has no opinion
+                        // on what range makes sense for a given field.
+                        if (field.min !== undefined && field.min !== null) { input.min = field.min; }
+                        if (field.max !== undefined && field.max !== null) { input.max = field.max; }
                     } else if (field.type === "date") {
                         input.type = "date";
                     } else {

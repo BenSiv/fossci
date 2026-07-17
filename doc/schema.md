@@ -40,9 +40,20 @@ return {
 | `select` | one of a fixed `values` list |
 | `reference` | points at another entity by id, optionally constrained to a specific `entity_type` |
 
+A `number` field may optionally declare `min`/`max` -- wired into the
+registration table's `<input type="number">` (`min`/`max` attributes,
+bounding the native spinner arrows), but **UI-hint only, not enforced
+server-side**. A real range constraint (rejecting an out-of-bounds value
+on submit) is still a `before_create`/`before_update` extension's job
+(see `extensibility.md`) -- `min`/`max` here don't replace that, they
+just stop the input widget itself from suggesting an obviously-invalid
+value. Consolidating this into a real, DB-enforced schema constraint is
+a bigger change (`entity_field` would need new columns) not done yet.
+
 Deferred: multi-select, attachments/files, rich text, computed/formula
-fields. None of these are ruled out architecturally -- they're just not
-needed to prove the core registration workflow end to end.
+fields, server-enforced numeric bounds. None of these are ruled out
+architecturally -- they're just not needed to prove the core
+registration workflow end to end.
 
 ## Loading is sandboxed, not just `dofile`
 

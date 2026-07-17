@@ -90,6 +90,27 @@ function test_every_real_field_type_individually()
     end
 end
 
+function test_number_field_min_max_valid()
+    print("Testing a number field with valid min/max passes")
+    def = {name = "task", fields = {{name = "importance", type = "number", min = 1, max = 5}}}
+    err = schema.validate(def)
+    check(err == nil, "expected no error, got: " .. tostring(err))
+end
+
+function test_number_field_min_greater_than_max_rejected()
+    print("Testing min greater than max is rejected")
+    def = {name = "task", fields = {{name = "importance", type = "number", min = 5, max = 1}}}
+    err = schema.validate(def)
+    check(err != nil, "expected an error when min > max")
+end
+
+function test_number_field_non_numeric_min_rejected()
+    print("Testing a non-numeric min is rejected")
+    def = {name = "task", fields = {{name = "importance", type = "number", min = "one"}}}
+    err = schema.validate(def)
+    check(err != nil, "expected an error for a non-numeric min")
+end
+
 -- Run them
 test_valid_schema_passes()
 test_non_table_rejected()
@@ -101,6 +122,9 @@ test_invalid_field_type_rejected()
 test_select_without_values_rejected()
 test_select_with_values_passes()
 test_every_real_field_type_individually()
+test_number_field_min_max_valid()
+test_number_field_min_greater_than_max_rejected()
+test_number_field_non_numeric_min_rejected()
 
 if FAILURES > 0 then
     print(FAILURES .. " test(s) failed")
