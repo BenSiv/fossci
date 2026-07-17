@@ -97,6 +97,25 @@
       dedicated pass: a single allowlist/charset check (e.g. `^[a-z_]
       [a-z0-9_]*$` matched against `schema.list()`) applied once,
       centrally, everywhere `entity_type` enters from external input.
+- [ ] **Known gap, found while auditing the hover-popover rollout
+      (`3d50607`)**: `/sql`'s entity-reference-link resolution (via
+      `view.guess_from_table` + `view.reference_columns`, `src/view.lua`)
+      only covers a single, unaliased `SELECT ... FROM <table>` -- a
+      deliberate heuristic per the comment already on
+      `view.guess_from_table`, not an oversight, but its practical effect
+      is that any query with a join, a subquery, a table alias, or a
+      renamed (`AS`) column silently falls back to `display_value` (the
+      raw id) for reference columns instead of `entity_display_label`,
+      with no indication to the user that resolution was skipped. Same
+      gap applies to both the result table's own display and its
+      hover-preview popover, since both key off `ref_columns[name]`.
+      Two options, not yet decided between: (a) surface the limitation
+      in the UI when a join/alias is detected (cheap, keeps the
+      heuristic), or (b) extend `view.reference_columns` to accept
+      multiple candidate tables (parsing all `FROM`/`JOIN ... table [AS
+      alias]` occurrences) and key results by the query's own column
+      provenance where the SQLite driver exposes it, instead of one
+      regex-guessed table name (real fix, more work).
 
 ## Deliberately deferred (see project_plan.md)
 - [ ] Live/as-you-type validation
