@@ -8,18 +8,22 @@
 - [x] Minimal CLI: `init`, `schema`, `entity`, `ledger`
 - [x] Capability-scoped sandbox primitive (`load` + `setfenv`), proven with a trivial example extension
 - [x] Test harness: bats CLI tests + Luam unit tests
-      **Correction, found 2026-07-17 while planning fossci's CI/CD** (see
-      `software`'s `docs/fossci-cicd-plan.md`, issue #8): in this
-      checkout, both `tst/unit/` and `tst/integration/` are empty
-      directories -- confirmed directly (`find tst -type f` returns
-      nothing), no bats files, no Luam test files. Whatever "done" here
-      referred to (a prior checkout, or just the scaffold/convention
-      being in place, matching M1's own later note that `tst/integration`
-      specifically stayed empty) doesn't reflect this checkout's actual
-      state -- correctness verification this session was done entirely
-      by hand (real CLI/CGI invocations against live test stores, see
-      recent commits), which doesn't scale to an automated CI gate. Real
-      tests need to exist here before any CI pipeline can run them.
+      **Correction found 2026-07-17, fixed same day**: this checkout's
+      `tst/unit/`/`tst/integration/` were actually empty (confirmed via
+      `find tst -type f`) despite this being marked done -- see
+      `software`'s `docs/fossci-cicd-plan.md` issue #8 for how it was
+      found (while planning fossci's CI/CD). Real harness now exists:
+      `tst/unit/schema.lua`/`view.lua` (standalone Luam scripts, matching
+      luametry's convention) cover `schema.validate` and `view.lua`'s
+      join-aware table-guessing/reference-column resolution;
+      `tst/integration/*.bats` (schema/entity/view/cgi) exercise the real
+      built binary end to end, CLI dispatch and real CGI-mode invocations
+      alike, including a regression test for the exact join-resolution
+      bug `view.lua`'s fix corrects. `bld/test.sh` runs both (build, then
+      unit, then bats), verified end to end including that a real failure
+      actually propagates a non-zero exit. This was the fossci-side
+      prerequisite blocking the CI/CD plan's Phase 2 test-gate step --
+      unblocked now.
 
 ## Next (M1 -- registration workflow)
 - [x] Registration-table CGI flow: fossci renders and serves its own
