@@ -16,6 +16,7 @@
 --       name = "bioreactor_experiment",  -- must match the filename
 --       label = "Bioreactor Experiment",
 --       description = "...",
+--       default_path = "Notebook/Bioreactor Experiment",  -- optional, see below
 --       sections = {
 --           {type = "heading", text = "Objective"},
 --           {type = "text", text = "..."},
@@ -23,6 +24,12 @@
 --               label = "Experiment", columns = {"number", "title"}},
 --       },
 --   }
+--
+-- default_path is optional: it's the page-name value html.render_template
+-- prefills the "New page name" field with (html.lua's own render_template
+-- falls back to `label` if absent) -- a deployment's own page-naming
+-- convention (e.g. a folder-path prefix) belongs here, in a deployment's
+-- own template files, never hardcoded into fossci itself.
 
 paths = require("paths")
 lfs = require("lfs")

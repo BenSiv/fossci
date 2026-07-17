@@ -1283,6 +1283,22 @@ function html.render_template(def, rendered_markdown, nonce)
     escaped_desc = html_escape(description)
     escaped_body = html_escape(rendered_markdown)
 
+    -- Real bug found in production: this input had no default value at
+    -- all (a placeholder is greyed-out hint text, not an actual value --
+    -- it contributes nothing once submitted), so creating a page from a
+    -- template gave zero guidance on this deployment's own naming
+    -- convention (e.g. Celleste-Bio's "<top folder>/<entry name>" path
+    -- style, see software's convert_entries_to_wiki.py -- fossci itself
+    -- has no concept of that convention, so it can't be hardcoded here).
+    -- default_path is an optional field a template definition can
+    -- declare for exactly this; falls back to the template's own label
+    -- if absent, which is still strictly better than an empty field.
+    default_path = def.default_path
+    if default_path == nil then
+        default_path = label
+    end
+    escaped_default_path = html_escape(default_path)
+
     return string.format("""
 <div class="fossil-doc" data-title="Template: %s">
     <style>
@@ -1359,7 +1375,7 @@ function html.render_template(def, rendered_markdown, nonce)
         <textarea class="fossci-snippet" id="fossci-template-content">%s</textarea>
         <div class="fossci-create-block">
             <label for="fossci-new-page-name">New page name</label>
-            <input type="text" id="fossci-new-page-name" placeholder="e.g. Experiment 512 - Fermentation Run">
+            <input type="text" id="fossci-new-page-name" value="%s" placeholder="e.g. Experiment 512 - Fermentation Run">
             <button type="button" id="fossci-create-from-template">Create wiki page</button>
             <div class="fossci-create-status" id="fossci-create-status"></div>
         </div>
@@ -1401,7 +1417,7 @@ function html.render_template(def, rendered_markdown, nonce)
     })();
     </script>
 </div>
-""", escaped_label, escaped_label, escaped_desc, escaped_body, nonce)
+""", escaped_label, escaped_label, escaped_desc, escaped_body, escaped_default_path, nonce)
 end
 
 -- Blank "create a new wiki page" form -- fills the "Notebook has no new
