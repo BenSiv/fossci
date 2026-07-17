@@ -281,33 +281,73 @@ end
 -- from db.query's rows (which are unordered Lua tables keyed by
 -- column name) so results render with real, ordered headers even for
 -- an empty result set.
--- Best-effort single-table guess for "which entity_field rows apply to
--- this query's results" -- covers the common `SELECT ... FROM <table>`
--- case (including the default example query), not joins/subqueries/
--- aliases. Real column-provenance tracking for arbitrary SQL would need
--- actual parsing; this is deliberately just a heuristic so the common
--- case gets reference-column links without that much bigger effort.
+-- Best-effort single-table guess for "which table is this query
+-- primarily about" -- used for the "id" self-reference special case in
+-- cgi.lua (the queried table's own id column). Still just the first
+-- `FROM <table>` match, alias discarded (a result column is looked up
+-- by its own name, not by qualified alias.column, so the alias itself
+-- is never needed). See guess_tables below for the full table list a
+-- query reads from, joins included.
 function view.guess_from_table(sql_text)
     table_name = string.match(sql_text, "[Ff][Rr][Oo][Mm]%s+([A-Za-z_][A-Za-z0-9_]*)")
     return table_name
 end
 
--- {column_name -> ref_entity_type} for a table's reference-type fields,
--- via the same entity_field metadata schema.layout() already exposes
--- (see html.lua's display_field_value) -- used here directly by table
--- name since an ad-hoc query has no schema.layout() call of its own.
-function view.reference_columns(db_path, table_name)
-    if table_name == nil then
-        return {}
+-- Best-effort guess of every table a query reads from: the primary
+-- FROM table plus any JOINed tables -- INNER/LEFT/RIGHT/OUTER/CROSS
+-- JOIN all end in the literal word "JOIN" immediately before the table
+-- name, so one case-insensitive match covers every join variant.
+-- Still string-matching, not a real SQL parser: comma-joins ("FROM a,
+-- b"), subqueries, and CTEs aren't covered, and each table's alias (if
+-- any) is discarded -- reference_columns below only needs the real
+-- table name to look up entity_field metadata, since a query's result
+-- columns are keyed by their own (possibly aliased-away) name, not by
+-- qualified alias.column.
+function view.guess_tables(sql_text)
+    tables = {}
+    seen = {}
+    from_table = view.guess_from_table(sql_text)
+    if from_table != nil then
+        table.insert(tables, from_table)
+        seen[from_table] = true
     end
-    rows = db.query(db_path, string.format(
-        "SELECT name, ref_entity_type FROM entity_field WHERE entity_type = %s AND type = 'reference';",
-        db.quote(table_name)
-    ))
+    for joined in string.gmatch(sql_text, "[Jj][Oo][Ii][Nn]%s+([A-Za-z_][A-Za-z0-9_]*)") do
+        if seen[joined] == nil then
+            table.insert(tables, joined)
+            seen[joined] = true
+        end
+    end
+    return tables
+end
+
+-- {column_name -> ref_entity_type} for a set of tables' reference-type
+-- fields, via the same entity_field metadata schema.layout() already
+-- exposes (see html.lua's display_field_value) -- used here directly by
+-- table name since an ad-hoc query has no schema.layout() call of its
+-- own. Accepts either a single table name (back-compat for callers that
+-- only ever guessed one table) or a list (see guess_tables) -- merged in
+-- list order, first table wins a column-name collision, so a query's
+-- primary FROM table takes precedence over a joined table that happens
+-- to reuse the same column name.
+function view.reference_columns(db_path, table_names)
     columns = {}
-    if rows != nil then
-        for _, row in ipairs(rows) do
-            columns[row.name] = row.ref_entity_type
+    if table_names == nil then
+        return columns
+    end
+    if type(table_names) == "string" then
+        table_names = {table_names}
+    end
+    for _, table_name in ipairs(table_names) do
+        rows = db.query(db_path, string.format(
+            "SELECT name, ref_entity_type FROM entity_field WHERE entity_type = %s AND type = 'reference';",
+            db.quote(table_name)
+        ))
+        if rows != nil then
+            for _, row in ipairs(rows) do
+                if columns[row.name] == nil then
+                    columns[row.name] = row.ref_entity_type
+                end
+            end
         end
     end
     return columns

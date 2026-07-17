@@ -397,7 +397,7 @@ function cgi.handle_request()
         elseif sql_text != "" then
             column_names, rows, sql_err = view.run_adhoc(db_path, sql_text)
             from_table = view.guess_from_table(sql_text)
-            ref_columns = view.reference_columns(db_path, from_table)
+            ref_columns = view.reference_columns(db_path, view.guess_tables(sql_text))
             -- The queried table's own "id" column had no link at all --
             -- render_reference_value already does exactly what's needed
             -- (an entity-type + id pair -> a real link with a display
