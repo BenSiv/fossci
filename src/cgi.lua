@@ -321,9 +321,10 @@ function cgi.handle_request()
         for _, row in ipairs(entity_types) do
             row.count = entity.count(db_path, row.name)
         end
+        edges = schema.relationships(db_path)
         index_capabilities = os.getenv("FOSSIL_CAPABILITIES")
         show_sql_widget = cgi.has_capability(index_capabilities, "s") or cgi.has_capability(index_capabilities, "a")
-        body = html.render_index(entity_types, show_sql_widget)
+        body = html.render_index(entity_types, edges, show_sql_widget, default_value(os.getenv("FOSSIL_NONCE"), ""))
         return print_response("200 OK", "text/html", body)
     end
 

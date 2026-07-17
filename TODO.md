@@ -91,6 +91,29 @@
 
 ## M3 -- analytics path
 - [ ] Postgres adapter for the projection tables (ledger semantics unchanged)
+- [x] **Added 2026-07-18**: interactive entity-relation diagram on the
+      Data page (`/` route) -- a `List`/`Diagram` toggle next to the
+      existing entity-type list, same page/URL, not a separate route
+      (per project discussion). `schema.relationships(db_path)` is new
+      pure introspection (same shape as `schema.list`/`schema.fields`):
+      walks every registered type's fields for `type == "reference"`,
+      returning `{from_type, to_type, field_name}` edges. Layout is a
+      circle (not a physics simulation -- deterministic, stable,
+      nothing to converge or drift off-canvas), radius scaled to node
+      count so labels don't crowd as a deployment registers more
+      types. All positioning/SVG markup is computed server-side in
+      Luam (`html.render_relation_diagram`) -- the only client-side JS
+      (`html.diagram_js`) is hover-to-highlight-relations and
+      click-to-browse, the same "server renders, client only handles
+      the interaction" split the popover feature already established.
+
+      Verified: new bats test (node-per-type, edge-per-reference-field,
+      against the real fixture schemas); all 26 integration tests pass;
+      a real headless-browser trace against a local replica (7 realistic
+      entity types, 5 reference edges) confirmed the toggle, the circular
+      layout, hover-highlighting the right edges/dimming the rest, and
+      clicking a node navigating to its `/browse?type=X` page -- all
+      working end to end, screenshotted before and during hover.
 - [x] Entity browse/detail views: `GET /browse?type=X` (table of all
       entities of a type) and `GET /detail?type=X&id=Y` (current field
       values + full ledger history), both pure server-rendered HTML, no

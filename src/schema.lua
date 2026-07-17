@@ -387,6 +387,25 @@ function schema.fields(db_path, entity_type)
     return rows
 end
 
+-- Every reference relationship between registered entity types --
+-- {from_type, to_type, field_name}, one per reference-typed field, across
+-- every registered schema. Backs the Data page's entity-relation diagram;
+-- a pure introspection query (like schema.fields()), so it belongs here
+-- rather than in html.lua/cgi.lua alongside the rendering.
+function schema.relationships(db_path)
+    types = schema.list(db_path)
+    edges = {}
+    for _, t in ipairs(types) do
+        fields = schema.fields(db_path, t.name)
+        for _, field in ipairs(fields) do
+            if field.type == "reference" and field.ref_entity_type != nil and field.ref_entity_type != "" then
+                table.insert(edges, {from_type = t.name, to_type = field.ref_entity_type, field_name = field.name})
+            end
+        end
+    end
+    return edges
+end
+
 function schema.list(db_path)
     rows = db.query(db_path, "SELECT name FROM entity_type ORDER BY name ASC;")
     if rows == nil then

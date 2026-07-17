@@ -1142,11 +1142,186 @@ function html.render_view(view_def, rows, param_value)
 """, escaped_title, fossci_container_css(1200), escaped_title, subtitle, register_link, table_or_empty)
 end
 
+-- Renders `entity_types`/`edges` (schema.relationships()'s output) as an
+-- inline SVG relation diagram -- nodes on a circle (a simple, stable
+-- layout: no physics simulation to converge, no risk of nodes drifting
+-- off-canvas), sized to the node count so labels don't crowd each other
+-- as a deployment registers more entity types. All positioning is
+-- computed server-side in Luam; the only client-side JS (diagram_js) is
+-- hover-highlight and click-to-browse, the same "server renders, client
+-- just does the interaction" split the popover feature already uses.
+function html.render_relation_diagram(entity_types, edges)
+    n = #entity_types
+    if n == 0 then
+        return "<p class=\"fossci-empty\">No entity types registered yet.</p>"
+    end
+
+    -- Radius grows with node count so per-node arc length (and so label
+    -- spacing) stays roughly constant instead of every node crowding
+    -- toward the center as more entity types get registered.
+    radius = 180
+    if n * 12 > radius then
+        radius = n * 12
+    end
+    cx = radius + 90
+    cy = radius + 40
+    size = radius * 2 + 180
+
+    index_by_name = {}
+    positions = {}
+    for i, row in ipairs(entity_types) do
+        index_by_name[row.name] = i
+        angle = (2 * math.pi * (i - 1)) / n - (math.pi / 2)
+        positions[i] = {x = cx + radius * math.cos(angle), y = cy + radius * math.sin(angle)}
+    end
+
+    edges_svg = ""
+    for _, edge in ipairs(edges) do
+        from_i = index_by_name[edge.from_type]
+        to_i = index_by_name[edge.to_type]
+        if from_i != nil and to_i != nil and from_i != to_i then
+            p1 = positions[from_i]
+            p2 = positions[to_i]
+            edges_svg = edges_svg .. string.format(
+                "<line class=\"fossci-diagram-edge\" data-from=\"%s\" data-to=\"%s\" x1=\"%.1f\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\" marker-end=\"url(#fossci-diagram-arrow)\"></line>",
+                html_escape(edge.from_type), html_escape(edge.to_type), p1.x, p1.y, p2.x, p2.y
+            )
+        end
+    end
+
+    nodes_svg = ""
+    for i, row in ipairs(entity_types) do
+        escaped_name = html_escape(row.name)
+        p = positions[i]
+        nodes_svg = nodes_svg .. string.format(
+            "<g class=\"fossci-diagram-node\" data-entity-type=\"%s\" tabindex=\"0\">" ..
+            "<circle cx=\"%.1f\" cy=\"%.1f\" r=\"9\"></circle>" ..
+            "<text x=\"%.1f\" y=\"%.1f\">%s</text>" ..
+            "</g>",
+            escaped_name, p.x, p.y, p.x, p.y - 14, escaped_name
+        )
+    end
+
+    return string.format("""
+<div class="fossci-diagram-hint">Hover an entity to see its relations; click to browse it.</div>
+<div class="fossci-diagram-scroll">
+<svg id="fossci-diagram-svg" viewBox="0 0 %d %d" width="%d" height="%d">
+    <defs>
+        <marker id="fossci-diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z"></path>
+        </marker>
+    </defs>
+    %s
+    %s
+</svg>
+</div>
+""", size, size, size, size, edges_svg, nodes_svg)
+end
+
+function html.relation_diagram_css()
+    return """
+        .fossci-diagram-hint { color: var(--fossci-muted, #64748b); font-size: 0.85rem; margin-bottom: 10px; }
+        .fossci-diagram-scroll { overflow: auto; border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-md, 12px); background: var(--fossci-bg, #f8fafc); }
+        .fossci-diagram-edge { stroke: var(--fossci-border, #cbd5e1); stroke-width: 1.5; transition: stroke 0.15s ease, opacity 0.15s ease; }
+        .fossci-diagram-edge.fossci-diagram-edge-active { stroke: var(--fossci-accent, #4f46e5); stroke-width: 2.5; }
+        .fossci-diagram-edge.fossci-diagram-edge-dim { opacity: 0.15; }
+        .fossci-diagram-arrow-fill { fill: var(--fossci-border, #cbd5e1); }
+        #fossci-diagram-arrow path { fill: var(--fossci-border, #cbd5e1); }
+        .fossci-diagram-node circle { fill: var(--fossci-bg, #ffffff); stroke: var(--fossci-accent, #4f46e5); stroke-width: 2; transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1)); }
+        .fossci-diagram-node text { font-size: 12px; font-weight: 600; text-anchor: middle; fill: var(--fossci-heading, #0f172a); text-transform: capitalize; }
+        .fossci-diagram-node { cursor: pointer; }
+        .fossci-diagram-node:hover circle, .fossci-diagram-node:focus circle { fill: var(--fossci-accent, #4f46e5); }
+        .fossci-diagram-node.fossci-diagram-node-dim { opacity: 0.25; }
+"""
+end
+
+-- `nonce` must be Fossil's own per-request CSP nonce, same requirement
+-- as html.popover_js.
+function html.diagram_js(nonce)
+    if nonce == nil then
+        nonce = ""
+    end
+    return string.format("""
+<script nonce="%s">
+(function(){
+    var toggle = document.getElementById('fossci-view-toggle');
+    var listView = document.getElementById('fossci-view-list');
+    var diagramView = document.getElementById('fossci-view-diagram');
+    if(toggle && listView && diagramView){
+        toggle.querySelectorAll('button').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                var view = btn.getAttribute('data-view');
+                listView.style.display = (view === 'list') ? '' : 'none';
+                diagramView.style.display = (view === 'diagram') ? '' : 'none';
+                toggle.querySelectorAll('button').forEach(function(b){
+                    b.classList.toggle('fossci-view-active', b === btn);
+                });
+            });
+        });
+    }
+
+    var svg = document.getElementById('fossci-diagram-svg');
+    if(!svg) return;
+    var nodes = svg.querySelectorAll('.fossci-diagram-node');
+    var edges = svg.querySelectorAll('.fossci-diagram-edge');
+    function related(a, b){
+        var isRelated = false;
+        edges.forEach(function(edge){
+            var from = edge.getAttribute('data-from'), to = edge.getAttribute('data-to');
+            if((from === a && to === b) || (from === b && to === a)){ isRelated = true; }
+        });
+        return isRelated;
+    }
+    nodes.forEach(function(node){
+        var type = node.getAttribute('data-entity-type');
+        function highlight(){
+            edges.forEach(function(edge){
+                if(edge.getAttribute('data-from') === type || edge.getAttribute('data-to') === type){
+                    edge.classList.add('fossci-diagram-edge-active');
+                }else{
+                    edge.classList.add('fossci-diagram-edge-dim');
+                }
+            });
+            nodes.forEach(function(other){
+                var otherType = other.getAttribute('data-entity-type');
+                if(otherType != type && !related(type, otherType)){
+                    other.classList.add('fossci-diagram-node-dim');
+                }
+            });
+        }
+        function clear(){
+            edges.forEach(function(edge){ edge.classList.remove('fossci-diagram-edge-active', 'fossci-diagram-edge-dim'); });
+            nodes.forEach(function(other){ other.classList.remove('fossci-diagram-node-dim'); });
+        }
+        node.addEventListener('mouseenter', highlight);
+        node.addEventListener('focus', highlight);
+        node.addEventListener('mouseleave', clear);
+        node.addEventListener('blur', clear);
+        node.addEventListener('click', function(){
+            window.location.href = 'fossci/browse?type=' + encodeURIComponent(type);
+        });
+        node.addEventListener('keydown', function(e){
+            if(e.key === 'Enter' || e.key === ' '){
+                e.preventDefault();
+                window.location.href = 'fossci/browse?type=' + encodeURIComponent(type);
+            }
+        });
+    });
+})();
+</script>
+""", nonce)
+end
+
 -- fossci's own landing page: every registered entity type, linking to
--- its browse view. This is the page a deployment's Fossil "mainmenu"
--- entry (see doc/deployment.md) should point at, so there's a real
--- entry point into fossci beyond knowing a /browse?type=... URL by hand.
-function html.render_index(entity_types, show_sql_widget)
+-- its browse view, plus a toggle to an interactive entity-relation
+-- diagram (html.render_relation_diagram) built from the same reference
+-- fields entity.lua/schema.lua already track -- same page/URL, just a
+-- second view of the same data, per the "toggle next to the list"
+-- design call rather than a separate route. This is the page a
+-- deployment's Fossil "mainmenu" entry (see doc/deployment.md) should
+-- point at, so there's a real entry point into fossci beyond knowing a
+-- /browse?type=... URL by hand.
+function html.render_index(entity_types, edges, show_sql_widget, nonce)
     items = ""
     for _, row in ipairs(entity_types) do
         escaped_name = html_escape(row.name)
@@ -1190,19 +1365,25 @@ function html.render_index(entity_types, show_sql_widget)
 """
     end
 
+    diagram_html = html.render_relation_diagram(entity_types, edges)
+
     return string.format("""
 <div class="fossil-doc" data-title="fossci">
     <style>
 %s
-        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; }
+        .fossci-header { margin-bottom: 20px; border-bottom: 1px solid var(--fossci-bg-2, #f1f5f9); padding-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
         .fossci-header h2 { margin: 0 0 6px 0; font-size: 1.6rem; font-weight: 700; color: var(--fossci-heading, #0f172a); letter-spacing: -0.02em; }
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
+        .fossci-view-toggle { display: flex; gap: 6px; flex-shrink: 0; }
+        .fossci-view-toggle button { padding: 6px 14px; border-radius: var(--fossci-radius-sm, 8px); border: 1px solid var(--fossci-border, #e2e8f0); background: var(--fossci-bg, #f8fafc); color: var(--fossci-text, #334155); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1)); }
+        .fossci-view-toggle button.fossci-view-active { background: var(--fossci-accent, #4f46e5); border-color: var(--fossci-accent, #4f46e5); color: #ffffff; }
         .fossci-index-list { list-style: none !important; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
         .fossci-index-list li { list-style: none !important; background: var(--fossci-bg, #f8fafc); border: 1px solid var(--fossci-border, #e2e8f0); border-radius: var(--fossci-radius-item, 10px); display: flex; align-items: center; transition: var(--fossci-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1)); }
         .fossci-index-list li:hover { border-color: var(--fossci-accent, #4f46e5); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
         .fossci-index-list li::marker { content: ""; }
         .fossci-index-list a { flex: 1; display: block; padding: 12px 16px; color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; text-transform: capitalize; }
         .fossci-index-list a:hover { background: var(--fossci-bg-2, #f1f5f9); border-radius: var(--fossci-radius-item, 10px) 0 0 var(--fossci-radius-item, 10px); }
+%s
         .fossci-empty {
             padding: 32px;
             text-align: center;
@@ -1215,14 +1396,23 @@ function html.render_index(entity_types, show_sql_widget)
     %s
     <div class="fossci-container">
         <div class="fossci-header">
-            <h2>Entity types</h2>
-            <p>%d registered</p>
+            <div>
+                <h2>Entity types</h2>
+                <p>%d registered</p>
+            </div>
+            <div class="fossci-view-toggle" id="fossci-view-toggle">
+                <button type="button" data-view="list" class="fossci-view-active">List</button>
+                <button type="button" data-view="diagram">Diagram</button>
+            </div>
         </div>
-        %s
+        <div id="fossci-view-list">%s</div>
+        <div id="fossci-view-diagram" style="display:none;">%s</div>
     </div>
 %s
 </div>
-""", fossci_container_css(800), html.popover_css(), #entity_types, list_or_empty, sql_widget)
+%s
+""", fossci_container_css(800), html.relation_diagram_css(), html.popover_css(), #entity_types,
+     list_or_empty, diagram_html, sql_widget, html.diagram_js(nonce))
 end
 
 -- Every entry template found (whether it loaded cleanly or not), each

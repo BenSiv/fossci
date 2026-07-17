@@ -46,6 +46,17 @@ teardown() {
     cleanup_test_env
 }
 
+@test "/ renders the entity-relation diagram with a node per type and an edge for each reference field" {
+    run_cgi "/" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "200 OK" ]]
+    [[ "$output" =~ "fossci-diagram-node\" data-entity-type=\"person\"" ]]
+    [[ "$output" =~ "fossci-diagram-node\" data-entity-type=\"experiment\"" ]]
+    [[ "$output" =~ "fossci-diagram-node\" data-entity-type=\"sample\"" ]]
+    [[ "$output" =~ "fossci-diagram-edge\" data-from=\"experiment\" data-to=\"person\"" ]]
+    [[ "$output" =~ "fossci-diagram-edge\" data-from=\"sample\" data-to=\"experiment\"" ]]
+}
+
 @test "/register renders the registration form for a real entity type" {
     run_cgi "/register" "type=sample"
     [ "$status" -eq 0 ]
