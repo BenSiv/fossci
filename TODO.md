@@ -156,6 +156,42 @@
       unresolved -- same silent raw-id fallback as before for those, just
       a narrower set of cases than plain joins now.
 
+- [x] **Fixed 2026-07-18**: `.btn`/`.btn-primary`/`.btn-secondary`/
+      `.btn-delete` existed as three separate, hand-copied inline CSS
+      blocks (`render()`, `render_browse()`, `render_sql()`) that had
+      quietly drifted apart -- reported live as visible button-styling
+      inconsistency (Celleste-Bio's "run and chat buttons" complaint).
+      Confirmed via a real rendered-page computed-style comparison, not
+      just reading the CSS: `render_sql()`'s copy never had the shared
+      `.btn` base at all (no flex-centering, no shared padding/
+      transition), and its `.btn-secondary` was a whole font-size step
+      smaller (0.85rem vs the others' inherited 0.9rem) -- the "Run"/
+      "Generate query" buttons measurably didn't match "Submit Batch"/
+      "+ Add Row" elsewhere in the app. Fixed with a new
+      `fossci_button_css()` (same pattern as `fossci_container_css()`),
+      one shared definition used by all three `render_*` functions; also
+      had to add the missing `btn` class to `render_sql()`'s own button
+      markup (`class="btn-primary"` -> `class="btn btn-primary"`, same
+      for `-secondary`), since the shared CSS split common properties
+      into `.btn` deliberately -- markup-only using `.btn-primary` alone
+      now gets just the color/variant, not the padding/radius/font-size,
+      which was caught and fixed before landing (a real regression during
+      the refactor itself, not shipped).
+
+      Verified: all 24 bats + unit tests still pass; a real headless-
+      browser trace against a local replica (real fossil-scm + fossci
+      binaries, production's actual `layout.lua`/skin config) confirmed
+      the "Run" and "Generate query" buttons now have byte-identical
+      computed border-radius/padding/font-size/height/display to
+      "Submit Batch"/"+ Add Row" -- before the fix they measurably
+      differed; after, they match exactly.
+
+      The floating chat-widget toggle button remains visually distinct
+      (a round pill FAB, different color/padding system) -- left as is,
+      pending confirmation this is an intentional design category
+      (floating launcher vs. inline form button) rather than the same
+      kind of drift.
+
 ## Deliberately deferred (see project_plan.md)
 - [ ] Live/as-you-type validation
 - [ ] Merge-conflict resolution UI for concurrent entity edits

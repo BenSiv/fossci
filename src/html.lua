@@ -81,6 +81,57 @@ function fossci_container_css(max_width)
 """, max_width)
 end
 
+-- Shared .btn/.btn-primary/.btn-secondary/.btn-delete rules -- previously
+-- three separate, hand-copied inline copies (render(), render_browse(),
+-- render_sql()) that had quietly drifted apart: render_sql()'s never
+-- picked up the shared .btn base at all (no flex-centering, no shared
+-- transition/padding token), and its .btn-secondary was a whole
+-- font-size step smaller (0.85rem vs the others' inherited 0.9rem) --
+-- confirmed via a real rendered-page diff, not just reading the CSS.
+-- One copy now, used everywhere a button appears.
+function fossci_button_css()
+    return """
+        .btn {
+            padding: 10px 20px;
+            border-radius: var(--fossci-radius-sm, 8px);
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--fossci-accent, #4f46e5), var(--fossci-accent-2, #6366f1));
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+        .btn-primary:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3); filter: brightness(1.05); }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-secondary {
+            background: var(--fossci-bg, #f8fafc);
+            color: var(--fossci-th-text, #475569);
+            border: 1px solid var(--fossci-border, #e2e8f0);
+        }
+        .btn-secondary:hover { background: var(--fossci-bg-2, #f1f5f9); color: var(--fossci-heading, #0f172a); }
+        .btn-secondary:active { transform: scale(0.98); }
+        .btn-secondary:disabled { opacity: 0.6; cursor: default; transform: none; }
+        .btn-delete {
+            background: transparent;
+            color: var(--fossci-muted-2, #94a3b8);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: color 0.15s ease;
+            border: none;
+            padding: 4px;
+        }
+        .btn-delete:hover { color: #ef4444; }
+"""
+end
+
 -- Generic hover-popover component, for "reveal detail on hover instead
 -- of cramming it into the default view" -- the design principle behind
 -- moving Data-index row counts and SQL-result entity previews off the
@@ -296,41 +347,7 @@ function html.render(entity_type, layout_json, nonce)
             justify-content: flex-start;
             align-items: center;
         }
-        .btn {
-            padding: 10px 20px;
-            border-radius: var(--fossci-radius-sm, 8px);
-            font-weight: 600;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            border: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--fossci-accent, #4f46e5), var(--fossci-accent-2, #6366f1));
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-        }
-        .btn-primary:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3); filter: brightness(1.05); }
-        .btn-primary:active { transform: scale(0.98); }
-        .btn-secondary {
-            background: var(--fossci-bg, #f8fafc);
-            color: var(--fossci-th-text, #475569);
-            border: 1px solid var(--fossci-border, #e2e8f0);
-        }
-        .btn-secondary:hover { background: var(--fossci-bg-2, #f1f5f9); color: var(--fossci-heading, #0f172a); }
-        .btn-delete {
-            background: transparent;
-            color: var(--fossci-muted-2, #94a3b8);
-            font-size: 1.25rem;
-            cursor: pointer;
-            transition: color 0.15s ease;
-            border: none;
-            padding: 4px;
-        }
-        .btn-delete:hover { color: #ef4444; }
+        %s
         .status-msg {
             margin-top: 24px;
             padding: 14px 20px;
@@ -641,7 +658,7 @@ function html.render(entity_type, layout_json, nonce)
         document.getElementById("btn-submit-batch").addEventListener("click", submitBatch);
     </script>
 </div>
-""", escaped_type, fossci_container_css(1200), escaped_type, escaped_type, escaped_type, nonce, json_for_script(layout_json), js_string_literal(entity_type))
+""", escaped_type, fossci_container_css(1200), fossci_button_css(), escaped_type, escaped_type, escaped_type, nonce, json_for_script(layout_json), js_string_literal(entity_type))
 end
 
 function display_value(value)
@@ -848,25 +865,7 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
         .fossci-header p { color: var(--fossci-muted, #64748b); margin: 0; font-size: 0.95rem; }
         .fossci-header a { color: var(--fossci-accent, #4f46e5); text-decoration: none; font-weight: 600; }
         .fossci-header a:hover { text-decoration: underline; }
-        .btn {
-            padding: 10px 20px;
-            border-radius: var(--fossci-radius-sm, 8px);
-            font-weight: 600;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            border: none;
-            display: inline-flex;
-            align-items: center;
-            text-decoration: none;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--fossci-accent, #4f46e5), var(--fossci-accent-2, #6366f1));
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-        }
-        .btn-primary:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3); filter: brightness(1.05); }
-        .btn-primary:active { transform: scale(0.98); }
+        %s
         .fossci-table-wrapper {
             overflow-x: auto;
             border: 1px solid var(--fossci-border, #e2e8f0);
@@ -928,7 +927,7 @@ function html.render_browse(db_path, entity_type, layout, rows, page, page_size,
     </div>
 </div>
 %s
-""", escaped_type, fossci_container_css(1200), html.popover_css(), escaped_type, total, escaped_type, table_or_empty, pager, html.popover_js(nonce))
+""", escaped_type, fossci_container_css(1200), fossci_button_css(), html.popover_css(), escaped_type, total, escaped_type, table_or_empty, pager, html.popover_js(nonce))
 end
 
 -- Real bug found while extracting fossci_container_css above, unrelated
@@ -1636,19 +1635,7 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
             color: var(--fossci-input-text, #1e293b);
             margin-bottom: 12px;
         }
-        .btn-primary {
-            padding: 10px 20px;
-            border-radius: var(--fossci-radius-sm, 8px);
-            font-weight: 600;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            border: none;
-            background: linear-gradient(135deg, var(--fossci-accent, #4f46e5), var(--fossci-accent-2, #6366f1));
-            color: #ffffff;
-        }
-        .btn-primary:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3); filter: brightness(1.05); }
-        .btn-primary:active { transform: scale(0.98); }
+        %s
         .fossci-sql-error {
             margin-top: 20px;
             padding: 14px 18px;
@@ -1677,21 +1664,6 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
             color: var(--fossci-input-text, #1e293b);
             font-size: 0.9rem;
         }
-        .btn-secondary {
-            padding: 10px 16px;
-            border-radius: var(--fossci-radius-sm, 8px);
-            font-weight: 600;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid var(--fossci-border, #e2e8f0);
-            background: var(--fossci-bg-2, #f1f5f9);
-            color: var(--fossci-text, #334155);
-            white-space: nowrap;
-        }
-        .btn-secondary:hover { background: var(--fossci-bg, #f8fafc); color: var(--fossci-heading, #0f172a); }
-        .btn-secondary:active { transform: scale(0.98); }
-        .btn-secondary:disabled { opacity: 0.6; cursor: default; transform: none; }
         .fossci-nlsql-status { font-size: 0.8rem; color: var(--fossci-muted, #64748b); white-space: nowrap; }
     </style>
     %s
@@ -1702,18 +1674,18 @@ function html.render_sql(db_path, sql_text, column_names, rows, err, ref_columns
         </div>
         <div class="fossci-nlsql" id="fossci-nlsql">
             <input type="text" id="fossci-nlsql-input" placeholder="Ask the agent to write or update this query in plain English..." autocomplete="off" />
-            <button type="button" class="btn-secondary" id="fossci-nlsql-btn">Generate query</button>
+            <button type="button" class="btn btn-secondary" id="fossci-nlsql-btn">Generate query</button>
             <span class="fossci-nlsql-status" id="fossci-nlsql-status"></span>
         </div>
         <form method="get" action="fossci/sql">
             <textarea class="fossci-sql-input" id="fossci-sql-query" name="q" placeholder="SELECT * FROM sample LIMIT 20;">%s</textarea>
-            <button class="btn-primary" type="submit">Run</button>
+            <button class="btn btn-primary" type="submit">Run</button>
         </form>
         %s
     </div>
 </div>
 %s
-""", fossci_container_css(1100), html.popover_css(), escaped_sql, result_html, html.popover_js(nonce))
+""", fossci_container_css(1100), fossci_button_css(), html.popover_css(), escaped_sql, result_html, html.popover_js(nonce))
 end
 
 -- Percent-encodes everything except unreserved characters and "/" --
