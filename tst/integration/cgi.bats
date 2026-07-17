@@ -80,6 +80,18 @@ teardown() {
     [[ "$output" =~ "400 Bad Request" ]]
 }
 
+@test "/api/preview resolves a reference field to the referenced entity's name, not its raw id" {
+    # Reported live 2026-07-18: the hover-popover preview showed a
+    # sample's "experiment"/"container"-style reference fields as raw
+    # foreign-key ids, not the referenced entity's name -- confirmed the
+    # link text itself (render_reference_value) already resolved fine,
+    # this was isolated to handle_preview's own field_lines loop, which
+    # never reference-resolved anything.
+    run_cgi "/api/preview" "type=experiment&entity_id=2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Dr. Cohen" ]]
+}
+
 @test "/sql resolves a reference column on the FROM table" {
     # /sql requires Setup or Admin capability (not just baseline "i").
     FOSSIL_CAPABILITIES="is" run_cgi "/sql" "q=SELECT+id%2C+lot_number%2C+experiment+FROM+sample%3B"

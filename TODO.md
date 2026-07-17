@@ -192,6 +192,45 @@
       (floating launcher vs. inline form button) rather than the same
       kind of drift.
 
+- [x] **Fixed 2026-07-18**: the hover-popover preview (`/api/preview`,
+      `handle_preview` in `cgi.lua`) showed reference-type fields as
+      their raw foreign-key id instead of the referenced entity's name
+      -- reported live specifically for a "sample" row's "experiment"/
+      "container" fields. Root cause: this was a genuinely separate code
+      path from `render_reference_value` (used by `/browse`/`/detail`/
+      `/sql`'s own cell rendering, which already resolved references
+      correctly) -- `handle_preview`'s own field-rendering loop just did
+      `html_escape(tostring(value))` for every field, with no reference
+      awareness at all, for any entity type, not just these two; they
+      were simply the first ones a real user happened to check.
+      Confirmed directly against real production data before fixing (via
+      a real CGI-mode call to the live production container, not a
+      synthetic repro): the popover showed literal ids `197631`/`197963`
+      where the referenced experiment/container rows are actually named
+      `exp343`/`Petri dish 9cm`. Fixed by resolving `field.type ==
+      "reference"` values through the existing `entity_display_label()`
+      before rendering, same as the working code paths already do.
+
+      Verified: new bats test (`/api/preview resolves a reference field
+      to the referenced entity's name, not its raw id`); all 25
+      integration tests pass; the exact real production row from the
+      live bug report re-checked with the fixed binary (copied
+      alongside, not yet replacing the deployed one) shows
+      `"Experiment: exp343"` / `"Container: Petri dish 9cm"` where it
+      previously showed the raw ids.
+
+- [ ] **Investigated 2026-07-18, not a bug, needs more repro detail**:
+      Celleste-Bio reported the nav-icon hover tooltip (`.fossci-nav-label`)
+      never shows on any page. A real headless-browser trace against a
+      local replica seeded with production's actual skin config hovered
+      all 7 real nav icons across both a fossci page and two genuinely
+      Fossil-native pages (`/wiki`, `/timeline`) -- every tooltip showed
+      correctly, positioned correctly, every time. Whatever's failing for
+      the real user isn't reproduced by a synthetic CDP hover event in
+      this replica; needs either a specific repro (which icon, timing,
+      browser) or a live trace against the actual browser session that's
+      failing.
+
 ## Deliberately deferred (see project_plan.md)
 - [ ] Live/as-you-type validation
 - [ ] Merge-conflict resolution UI for concurrent entity edits

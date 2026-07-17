@@ -208,8 +208,15 @@ function handle_preview(db_path, params)
         if shown < 5 then
             value = row[field.name]
             if value != nil and tostring(value) != "" then
+                display_value = tostring(value)
+                if field.type == "reference" and field.ref_entity_type != nil then
+                    ref_label = entity_display_label(db_path, field.ref_entity_type, value)
+                    if ref_label != nil then
+                        display_value = ref_label
+                    end
+                end
                 field_lines = field_lines .. "<div><strong>" .. html_escape(field.label) .. ":</strong> " ..
-                    html_escape(tostring(value)) .. "</div>"
+                    html_escape(display_value) .. "</div>"
                 shown = shown + 1
             end
         end
