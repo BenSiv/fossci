@@ -211,9 +211,37 @@ alongside the original create event, never replacing it.
   the link-regression test above. 46 integration tests total, all
   passing.
 
-### Phase 3 -- storage consolidation
-- Merge fossci's own store schema into the same SQLite file real user/
-  session/capability tables live in. One file, one backup story.
+### Phase 3 -- storage consolidation (done 2026-07-18)
+- Already true by construction, not new work: unlike old fossci+Fossil
+  (a real two-database split, `repo.fossil` + `.fossci/fossci.db`),
+  platform-wip was built from Phase 0 onward as one unified store --
+  there was never a second store to merge. Confirmed empirically
+  rather than assumed: initialized a fresh store, registered a schema,
+  created an entity, approved an extension and a view, then dumped the
+  actual SQLite file's table list and full schema directly --
+  `entity_event`/`entity_type`/`entity_field` (ledger), `user` (auth),
+  `extension_approval`/`extension_job`, `view_approval`, and every
+  projected entity table all live in the one `.store/store.db` file,
+  no `ATTACH`, no cross-db references anywhere.
+- Two things deliberately stay outside that file, and both are correct
+  as-is, not consolidation gaps: `session_secret` (a raw file, not a
+  DB row -- a crypto secret has different backup/rotation handling
+  than app data, keeping it separate is normal practice) and the
+  `schemas/`/`extensions/`/`views/`/`templates/` directories (plain
+  files by design -- see doc/schema.md/extensibility.md's
+  "definitions are code, not data" stance, a different axis entirely
+  from "is storage fragmented").
+- One real, related improvement made while here: `luam/lib/database.lua`
+  now sets `PRAGMA journal_mode = WAL` alongside the `busy_timeout`
+  it already had (both on every connection open, since this module
+  opens a fresh connection per call -- WAL is a persistent property of
+  the file itself, so redoing it is harmless, just guarantees it's
+  actually set). Lets readers and a writer proceed concurrently instead
+  of blocking each other -- matters once more than one browser tab/client
+  hits a tenant's store at once. Verified directly: a fresh store's
+  `PRAGMA journal_mode` reads back as `wal`. Shared file, so this
+  benefits every luam-based project (fossci, brain-ex, platform-wip),
+  not just this one.
 
 ### Phase 4 -- Notebook-as-entity, redesigned as a real tree
 
