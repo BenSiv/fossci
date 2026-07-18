@@ -315,39 +315,74 @@ apart) plus new `cgi.lua` routes and `html.lua` rendering:
   the *existing* generic `/api/archive` route -- no document-specific
   archive code needed at all). 56 integration tests total, all passing.
 
-### Phase 5 -- agent/chat replacement
+### Phase 5 -- agent/chat replacement (done 2026-07-18)
 
-Confirmed via `brain-ex` (`/root/projects/brain-ex`) as a concrete,
-already-working blueprint for most of this -- not just inspiration, see
-the dedicated section below for what to port directly vs. rebuild:
+Delivered in platform-wip as `src/agent.lua` (+ `agent_provider*.lua`,
++ `document.lua`'s new search functions) plus new `cgi.lua` routes and
+`html.lua` chat rendering. `brain-ex` (`/root/projects/brain-ex`)
+confirmed a genuinely usable blueprint, not just inspiration -- see
+each bullet for exactly what got ported as-is vs. adapted vs. replaced:
 
-- Provider abstraction (`provider.generate(model, system_prompt,
-  prompt) -> (result, err)`, dynamically loaded by name) -- the seam
-  where Vertex AI/Gemini (kept, direct API call instead of via
-  fossil-scm's C code + gemini-cli subprocess) or any other provider
-  plugs in.
-- DB-backed conversation history + context-window compaction (summarize-
-  oldest-except-last-N once a token-estimate threshold is crossed,
-  zero-deletion -- rows marked out-of-context, never dropped) --
-  replaces `agent_store.c`. Needs one change from brain-ex's version:
-  real per-user/per-request session IDs, not a hardcoded single
-  session.
-- A tool-use protocol (`<tool>/<method>/<args>` / `<done>` tags + a
-  bounded turn loop) for letting the agent act (create/update a
-  document, query the ledger) -- replaces the MCP-server plan from
-  `fossci-agent-compose-plan.md` with something native to this
-  project instead of a separate Python process. Needs a **web-native
-  confirmation gate** in place of brain-ex's blocking terminal y/N
-  prompt for destructive operations -- directly resolves that doc's
-  open "execute immediately or wait for confirmation" question: yes,
-  gate it, just not via a TTY.
-- Semantic search over documents/notes (replacing `agent.c`'s
-  `ai_note`/`ai_vector`): `knowledge_pool.lua`'s ranking formula
-  (weighted lexical match + optional embedding cosine-similarity +
-  tier/reinforcement weighting + duplicate suppression + a relevance
-  floor) is a complete, portable algorithm -- pairs naturally with
-  SQLite FTS5 for the lexical half (see Open questions) and an
-  embeddings provider call for the semantic half.
+- Provider abstraction: `agent_provider.lua` loads a named backend
+  dynamically (`AGENT_PROVIDER` env var), exactly the seam scoped.
+  Two real implementations, not one -- `agent_provider_vertex.lua` (a
+  real Vertex AI backend, `curl` shell-out authenticated with fresh
+  `gcloud` ADC credentials -- direct REST calls, no fossil-scm C code
+  or gemini-cli subprocess involved at all) verified against a live
+  project (`gemini-2.5-flash` for generation, `text-embedding-005` for
+  embeddings, both in `us-central1`), and `agent_provider_test.lua` (a
+  deterministic backend so this project's own test suite doesn't
+  repeatedly hit a paid API on every run -- itself just another named
+  provider behind the same facade, not a mock bolted on separately).
+- DB-backed conversation history + context-window compaction: ported
+  from brain-ex's `agent_engine.lua` essentially as-is (same
+  chars/4 token estimate, same threshold/keep-last-4 defaults,
+  same summarize-then-mark-out-of-context mechanics -- zero deletion).
+  The one change the plan called for -- real per-user sessions instead
+  of a hardcoded `'default'` -- is done: every session belongs to a
+  specific login, and every lookup (including pending-action
+  resolution) checks that ownership before touching anything.
+- Tool-use protocol: the `<tool>/<method>/<args>`/`<done>` tag parsing
+  and bounded 10-turn loop are ported from `agent_engine.lua`
+  essentially as-is. The **web-native confirmation gate** is not a
+  port, by design -- brain-ex's blocking terminal y/N prompt assumes a
+  synchronous, long-lived process, which a single web request never
+  is. Replaced with a real two-phase state machine: a destructive call
+  persists as an `agent_pending_action` row and the request returns
+  immediately (no MCP server, no separate Python process -- native to
+  this project, resolving `fossci-agent-compose-plan.md`'s open
+  question the way this doc predicted: gate it, just not via a TTY); a
+  later, separate approve/deny request executes it (or records the
+  denial) and resumes the loop. Every tool call is attributed to the
+  real authenticated user driving the conversation, never a separate
+  "agent" identity -- a page the assistant creates/updates gets full,
+  correct ledger history exactly like a direct edit, additionally
+  tagged with which chat session it came from via `entity_event`'s own
+  source field. The registry itself is intentionally small today
+  (search/create/update on Pages), not the open-ended "query the
+  ledger" surface originally scoped -- proving the mechanism end to
+  end mattered more than covering every possible action in this pass.
+- Semantic search: adapted `knowledge_pool.lua`'s ranking formula, not
+  ported verbatim -- kept the reusable core (field-weighted lexical
+  matching, a substring-match bonus, blended embedding
+  cosine-similarity, a relevance floor) and dropped what has no
+  equivalent on Pages (curation-tier weighting, heat/retrieval-count
+  reinforcement, duplicate suppression -- none of those concepts exist
+  for documents the way they do for brain-ex's own knowledge items).
+  SQLite FTS5 (this doc's own lean for the lexical half) was evaluated
+  first, not assumed -- confirmed directly that platform-wip's bundled
+  SQLite has no FTS5 support compiled in, so search scores every
+  active page directly in Lua instead, a reasonable tradeoff at the
+  scale this is built for. A page's embedding is only ever computed via
+  the new explicit `platform document reindex-embeddings` CLI command,
+  never automatically on save -- that would mean a real API call per
+  save, an unnecessary and avoidable cost.
+- Test coverage: 22 new tests (turn-loop mechanics, the full
+  pending-approval pause/resume cycle, cross-user ownership, CSRF,
+  compaction, the reindex CLI, plus one dedicated test against the
+  real Vertex AI backend, guarded to skip cleanly when no live
+  credentials are configured). 68 integration tests total, all
+  passing.
 
 ### Phase 6 -- production cutover
 - Given this deployment is a **test replica** (Benchling + the wiki
@@ -455,15 +490,14 @@ confirmed by reading it, not hypothetical):
 
 - ~~**Markdown rendering.**~~ Resolved in Phase 4: `cmark` shell-out,
   not a vendored parser -- see that phase's own writeup.
-- **Full-text/semantic search infrastructure.** Fossil's own `/search`
-  (wiki full-text) and `agent.c`'s `ai_vector` semantic search both
-  disappear with Fossil. Leaning toward SQLite's built-in FTS5 virtual
-  table for the lexical half (well-tested, no new dependency beyond
-  confirming Luam's sqlite3 binding has FTS5 compiled in) combined
-  with `knowledge_pool.search_score`'s blended-ranking formula above --
-  and this could end up strictly better than what exists today, since
-  it could span every entity type uniformly, not just wiki content.
-  Not decided, needs its own scoping pass.
+- ~~**Full-text/semantic search infrastructure.**~~ Resolved in
+  Phase 5: FTS5 confirmed *not* compiled into platform-wip's SQLite
+  binding, so search scores every active page directly in Lua instead,
+  combined with the adapted `knowledge_pool.search_score` formula --
+  see that phase's own writeup. Scoped to Pages only for now, not
+  every entity type uniformly -- a real, still-open opportunity
+  ("A global activity feed"-style generalization) if search over other
+  entity types is ever wanted.
 - **Session storage.** Stateless HMAC cookies avoid needing a session
   table, but that also means no server-side "log this user out
   everywhere" revocation short of rotating the HMAC secret (which logs
