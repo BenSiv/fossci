@@ -243,47 +243,77 @@ alongside the original create event, never replacing it.
   benefits every luam-based project (fossci, brain-ex, platform-wip),
   not just this one.
 
-### Phase 4 -- Notebook-as-entity, redesigned as a real tree
+### Phase 4 -- Notebook-as-entity, redesigned as a real tree (done 2026-07-18)
 
 Not just "swap the storage, keep the naming convention." Fossil's
 wiki-page model forced identity-equals-name (the whole reason this
 plan exists -- see the wiki-rename research this phase replaces); a
-`document` entity type removes that constraint entirely, so the design
-should actually use the freedom, not just relocate the old convention:
+`document` entity type removes that constraint entirely, and the
+design uses the freedom rather than relocating the old convention.
 
-- `document` fields: a stable id (free, any entity type gets one),
-  `parent_id` (self-reference, nullable = root-level), `title`
-  (display name, freely renameable -- a plain field update, no
-  collision risk since it's not a global key), `content` (markdown),
-  and optionally a *cached, derived* `path` field (recomputed from the
-  `parent_id` chain on write, for URLs/breadcrumbs -- source of truth
-  is still `parent_id`, not the string).
-- Cross-document linking: adopt brain-ex's `[[title]]` /
-  `[[subject/title]]` wiki-link convention directly (`vault_to_sql.lua`'s
-  `parse_links_str`/`extract_links`) plus its `connections`-table
-  shape (a plain directed edge list) for backlinks -- a clean,
-  already-proven pattern, and a natural fit now that documents are
-  entities with real IDs to link between.
-- Rename = a plain `entity.update()` on `title` (and `parent_id` for
-  "move to a different folder"); both are just field writes, no
-  special-casing, no name-uniqueness trap. Directly resolves the
-  original complaint this whole investigation started from.
-- Migration script: walk the current Fossil repo's real wiki pages,
-  create one `document` entity per page, inferring `parent_id`/`title`
-  from the existing `/`-delimited naming convention (a one-time,
-  throwaway parse -- the convention stops mattering after this).
+Delivered in `platform-wip/src/document.lua` (a built-in entity type,
+registered programmatically via `schema.register` rather than a
+deployment-authored `schemas/document.lua` file -- its extra behavior
+below is tightly coupled to its exact field shape, so keeping schema
+and behavior in the same trusted module guarantees they can't drift
+apart) plus new `cgi.lua` routes and `html.lua` rendering:
+
+- `document` fields, exactly as scoped: `parent_id` (self-reference,
+  nullable = root-level), `title`, `content` (Markdown). The optional
+  *cached* `path` field was deliberately dropped -- there's no
+  computed/derived-field mechanism in the schema system (`schema.md`
+  already lists this as deferred), and a cached copy risks exactly the
+  staleness a "derived, not source of truth" field is supposed to
+  avoid. Breadcrumbs are computed by walking `parent_id` live on every
+  read instead -- always correct, no caching invalidation to get wrong.
+- Cross-document linking: adopted brain-ex's `[[title]]` /
+  `[[subject/title]]` *parsing* convention, but **not as-is** --
+  brain-ex's own version strips a matched link out of the displayed
+  content entirely once parsed (fine for its own tag-like link list,
+  wrong here: a document's prose needs the link to stay visible in
+  place). Links here stay in the content and get rewritten into a
+  real inline Markdown link (resolved) or a plain, clearly-marked
+  placeholder (dangling) before rendering. Backlinks live in a plain
+  `document_link` table (delete + reinsert on every save, brain-ex's
+  own resync pattern) rather than a schema-driven entity type with its
+  own ledger history -- links are a derived index over content that
+  already has full audit history in its own right; giving them their
+  own history would just be churn, not a real audit trail.
+- Rename/move = a plain `entity.update()` on `title`/`parent_id`, no
+  special-casing, no name-uniqueness trap -- directly resolves the
+  original complaint this whole investigation started from. Moving a
+  page underneath its own descendant is rejected outright at save time
+  (`document.would_create_cycle`), not left to corrupt the tree or
+  infinite-loop a breadcrumb walk.
+- Migration script (walk the real Fossil wiki pages, infer
+  `parent_id`/`title` from the `/`-delimited convention): **not
+  built**, and not platform-wip's concern to build -- per the
+  "standalone project" direction this codebase now follows, a
+  one-off migration tied to one specific deployment's cutover belongs
+  in that deployment's own tooling (`software`), not the generic
+  platform. The final-state-only reasoning below still holds whenever
+  that migration script actually gets written.
   **Given this deployment is a test replica with Benchling and the
   wiki-pages repo as the real sources of truth (confirmed directly,
   not assumed), full multi-revision history does not need to survive
   cutover at all** -- a final-state-only migration is not just
   acceptable but sufficient, which removes what would otherwise be the
   riskiest part of this phase.
-- Markdown rendering: needs its own renderer now that Fossil's
-  `/wikiajax/preview` is gone (see Open questions -- still open,
-  leaning `cmark` shell-out).
-- Minimal edit UI: a textarea + preview (reusing whatever markdown
-  renderer gets picked), not a wysiwyg editor -- Fossil's wysiwyg wiki
-  editor does not carry over and isn't in scope to rebuild.
+- Markdown rendering: `cmark` shell-out, as leaned toward -- a real
+  external runtime dependency (must be on `PATH`), not vendored and not
+  statically linked into the binary the way bcrypt/HMAC are. Its
+  default (non-`--unsafe`) mode strips raw HTML from the source
+  Markdown, which matters specifically because document content is
+  user-authored and shown to other users.
+- Minimal edit UI: a textarea + live preview (debounced JS calling a
+  new `/api/document-preview` endpoint), not a wysiwyg editor, exactly
+  as scoped.
+- Test coverage: 10 new `document.bats` tests (tree nesting order,
+  breadcrumbs, link resolution vs. dangling-link rendering, backlinks,
+  edit-in-place vs. accidental duplicate creation, cycle rejection,
+  live preview + its own CSRF check, archive/unarchive integration via
+  the *existing* generic `/api/archive` route -- no document-specific
+  archive code needed at all). 56 integration tests total, all passing.
 
 ### Phase 5 -- agent/chat replacement
 
@@ -423,16 +453,8 @@ confirmed by reading it, not hypothetical):
 
 ## Open questions, not decided here
 
-- **Markdown rendering.** Fossil's `/wikiajax/preview` endpoint is
-  currently the *only* markdown-to-HTML renderer in the whole stack
-  (used by the wysiwyg-editor live-preview fix from earlier this
-  session, among other things). Dropping Fossil drops this too --
-  needs either a vendored pure-Lua markdown parser (none evaluated
-  yet) or a CLI shell-out to a small, fast, well-tested C
-  implementation (e.g. `cmark`), the same pragmatic
-  defer-to-a-real-implementation stance already taken for wiki
-  versioning and password hashing. Needs its own research pass before
-  Phase 4.
+- ~~**Markdown rendering.**~~ Resolved in Phase 4: `cmark` shell-out,
+  not a vendored parser -- see that phase's own writeup.
 - **Full-text/semantic search infrastructure.** Fossil's own `/search`
   (wiki full-text) and `agent.c`'s `ai_vector` semantic search both
   disappear with Fossil. Leaning toward SQLite's built-in FTS5 virtual
