@@ -171,17 +171,45 @@ alongside the original create event, never replacing it.
   yet (CLI-only for now) -- folded into Phase 2 below, which already
   expected to need one.
 
-### Phase 2 -- CGI hosting
-- Confirm the existing `cgi.lua` dispatch works unmodified when invoked
-  directly by a real web server's CGI/FastCGI mechanism (no Fossil in
-  the middle at all). This is expected to need near-zero changes --
-  the risk here is almost entirely in the *deployment* config
-  (nginx/Apache CGI setup), not the application code.
-- A minimal user-admin *page* (Fossil's own `/setup/*` pages had no
-  fossci equivalent before) -- Phase 1 already delivered the login
-  page itself (`html.render_login`) and the `platform user *` CLI;
-  this phase's remaining piece is just a web UI over that same CLI
-  surface for admins who'd rather not shell in.
+### Phase 2 -- CGI hosting (done 2026-07-18)
+- Confirmed empirically, not just by inspection: installed Apache
+  (mod_cgid) locally, configured a `ScriptAlias` mounting the whole app
+  under a URL prefix (`/app -> cgi-bin/platform`, PATH_INFO-based, the
+  standard "one script handles a whole subtree" CGI pattern), and
+  exercised a real login -> session cookie -> authenticated
+  request -> logout cycle over real HTTP. Needed **zero** application
+  code changes to make this work, confirming the original hypothesis.
+- That same real-hosting test surfaced a genuine, previously-unnoticed
+  bug: several links/form-actions/fetch URLs in `html.lua`
+  (browse/register/detail navigation, the SQL query iframe and form,
+  the templates list) carried a leftover `fossci/`-prefixed (or
+  absolute `/ext/fossci/...`) path segment from an old mount-point
+  convention this project no longer uses -- every one of them 404'd
+  once actually served through a real web server under a URL prefix,
+  masked until now because every bats assertion checking these links
+  used an unanchored substring match. Fixed to plain relative
+  references (resolve correctly under any mount point); added a
+  regression test asserting the fix and tightened the assertions that
+  missed it. Also deleted two entirely dead render functions
+  (`render_wiki_new`, `render_notebook_tree`, both leftover from routes
+  removed in Phase 0) found during the same pass.
+- Minimal Admin-only user-admin page: `GET /admin-users` (list) +
+  `POST /admin-users-create|capabilities|password|archive|unarchive`,
+  a thin web UI over the `platform user *` CLI surface, gated on the
+  "a" (Admin) capability. Flat, single-segment route names
+  (`/admin-users-create`, not `/admin/users/create`) deliberately, so
+  this route family can link to itself and back to the listing page
+  via plain relative references without needing `../`-style relative
+  math -- exactly the bug class just fixed above.
+- `require_csrf` extended to accept a submitted token from a parsed
+  form field, not just the `X-CSRF-Token` header the JS `fetch()`
+  callers use -- a plain HTML `<form>` POST (the admin page's only
+  interaction model) has no way to attach a custom header at all.
+- Test coverage: 4 new `auth.bats` tests (Admin-capability gating,
+  create/capabilities/password/archive/unarchive round-tripping through
+  the actual HTTP routes, CSRF rejection via the form-field path) plus
+  the link-regression test above. 46 integration tests total, all
+  passing.
 
 ### Phase 3 -- storage consolidation
 - Merge fossci's own store schema into the same SQLite file real user/
